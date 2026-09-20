@@ -28,9 +28,10 @@ void ICACHE_FLASH_ATTR processWiFiConnection() {
       WiFi.mode(WIFI_STA);
     }
 
-    // Sync connected SSID to config
+    // Sync connected SSID + password to config
     if (strlen(config.ssid) == 0) {
       safeStringCopy(WiFi.SSID(), config.ssid, sizeof(config.ssid));
+      safeStringCopy(WiFi.psk(), config.password, sizeof(config.password));
       saveConfig();
     }
 
@@ -96,7 +97,12 @@ void ICACHE_FLASH_ATTR setupWiFi() {
       Serial.print("DNS: ");
       Serial.println(WiFi.dnsIP());
 
+      // Persist the password too, not just the SSID. The SDK keeps the
+      // password in its own flash area, but every later boot reads
+      // config.password: an empty one is treated as an open network
+      // (WiFi.begin(ssid)) and fails with WL_WRONG_PASSWORD (issue #12).
       safeStringCopy(WiFi.SSID(), config.ssid, sizeof(config.ssid));
+      safeStringCopy(WiFi.psk(), config.password, sizeof(config.password));
       saveConfig();
 
       showIP();
@@ -166,7 +172,10 @@ void ICACHE_FLASH_ATTR setupWiFi() {
     Serial.print("IP: ");
     Serial.println(WiFi.localIP());
 
+    // Save both SSID and password (issue #12): WiFiManager stores them in the
+    // SDK flash, but the next boot connects from config.* only.
     safeStringCopy(WiFi.SSID(), config.ssid, sizeof(config.ssid));
+    safeStringCopy(WiFi.psk(), config.password, sizeof(config.password));
     saveConfig();
 
     showIP();

@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.10] - 2026-09-20
+
+### Fixed
+
+- **WiFi password lost after captive-portal setup, no reconnect after reboot** (#12):
+  after a successful connect via SDK-cached credentials (Try 1) or the WiFiManager
+  portal, only the SSID was written to EEPROM. On the next boot `config.password`
+  was empty, so `setupWiFi()` and the reconnect loop called `WiFi.begin(ssid)` as
+  if the network were open and failed with `WL_WRONG_PASSWORD`. v1.9.6 masked this
+  through the bare `WiFi.begin()` fallback in the retry loop, which 02834ba (v1.9.7)
+  replaced with `WiFi.begin(config.ssid)`. Now the password is read back with
+  `WiFi.psk()` and saved next to the SSID in all three places that sync the SSID.
+  Devices already stuck recover by entering the password once in the web UI.
+
 ## [1.9.9] - 2026-05-19
 
 ### Fixed

@@ -266,7 +266,7 @@ For architecture details (async state machines, memory budget, EEPROM layout, fa
 
 ## Version History
 
-The clock has gone through many iterations — display hardware discovery (v1.5–v1.7), stability and security fixes (v1.8), full async refactor (v1.9.0), and a long series of bug fixes informed by community reports and AI-assisted code review (v1.9.1–v1.9.9).
+The clock has gone through many iterations — display hardware discovery (v1.5–v1.7), stability and security fixes (v1.8), full async refactor (v1.9.0), and a long series of bug fixes informed by community reports and AI-assisted code review (v1.9.1–v1.9.10).
 
 See [CHANGELOG.md](CHANGELOG.md) for the full version history with technical details.
 
@@ -668,4 +668,4 @@ This project is released into the public domain. Do whatever you want with it. I
 
 ---
 
-**Author**: apetrochenko · **License**: MIT · **Firmware**: v1.9.9
+**Author**: apetrochenko · **License**: MIT · **Firmware**: v1.9.10
