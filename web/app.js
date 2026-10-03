@@ -245,7 +245,10 @@
     }).catch(error => message($('settings-result'), error.message + ' Reload this page to retry.', true));
   }
   formControl('brightness').addEventListener('input', event => { $('brightness-value').textContent = event.target.value + ' / 7'; });
-  settingsForm.addEventListener('input', () => settingsState(true));
+  settingsForm.addEventListener('input', event => {
+    if (/^(show_|screen_|clock_weather$)/.test(event.target.name)) $('screen-preset').value = 'custom';
+    settingsState(true);
+  });
   settingsForm.addEventListener('change', () => settingsState(true));
   settingsForm.addEventListener('invalid', event => { const details = event.target.closest('details'); if (details) details.open = true; }, true);
   $('discard-settings').addEventListener('click', () => { if (savedSettings && !busy) fillSettings(savedSettings); });
@@ -323,7 +326,15 @@
     try {
       const result = await request('/api/config', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(values)});
       delete values.password; delete values.clear_password;
-      fillSettings({...savedSettings, ...values});
+      let actual = {...savedSettings, ...values};
+      if (!result.restart) {
+        try { actual = await request('/api/config'); }
+        catch { throw Error('Could not verify saved settings. Reload Settings to check.'); }
+        if (Object.entries(values).some(([key, value]) =>
+          key === 'latitude' || key === 'longitude' ? !Number.isFinite(actual[key]) || Math.abs(actual[key] - value) > 0.00001 : actual[key] !== value))
+          throw Error('Some settings were not saved. Your edits are still here; try Save again.');
+      }
+      fillSettings(actual);
       message($('settings-result'), result.restart ? 'Saved. Clock restarting; reconnect using its new network details.' : 'Saved.');
     } catch (error) { message($('settings-result'), error.message + (values.password ? ' Re-enter the Wi-Fi password before retrying.' : ''), true); }
     finally { busy = false; formControl('password').value = ''; $('settings-fields').disabled = false; settingsState(); }

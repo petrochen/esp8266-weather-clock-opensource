@@ -2,11 +2,14 @@
 
 ## Trying the 1.11 beta
 
-The source tree now targets **1.11.0-beta.1**; the sections below also describe the
-compatible stable controls. Start with Settings → **Time & weather** → Save for a
+The source tree now targets **1.11.0-beta.2**; the sections below also describe the
+compatible stable controls. Start with Settings → **Combined clock + UV** → Save for a
 large clock with a weather footer, alternating with the UV daytime peak. **Clock only** hides weather pages;
 **Detailed weather** enables the extra pages. Presets stage changes before Save
-and keep unrelated unsaved settings. Discard restores the saved configuration.
+and keep unrelated unsaved settings, but replace individual screen choices and
+durations. Choose a preset first, then adjust individual screens and save.
+The combined preset was called **Time & weather** in beta.1.
+Discard restores the saved configuration.
 
 Expand **More display options** for per-page durations (0 inherits the common
 interval), feels-like/humidity, rain probability, daily min/max/UV, wind, units,
@@ -18,6 +21,8 @@ All of this is optional: an upgrade preserves the previous display choices.
 On the Clock page, choose an available screen to hold it, or use Next / Hold /
 Resume. A held external card expires normally. Night schedules and temporary PIN
 screens override these controls. Hold is not saved across restart.
+Unavailable options are disabled in Settings or waiting for usable data. Enable
+the required pages in Settings and save; external cards also need a data source.
 
 **Import settings** reads a local JSON export (at most 8 KB), previews known fields
 and stages them in the form. Click Save to apply. Password/PIN fields from the file
@@ -40,7 +45,7 @@ flash or recovery, see [Installation](INSTALLATION.md).
 
 ## UV daytime peak
 
-Enable **UV daytime peak** in More display options, or select the Time & weather
+Enable **UV daytime peak** in More display options, or select the Combined clock + UV
 preset and Save. The screen shows today's predicted daily maximum, its level and
 tomorrow's maximum. It has its own duration setting and direct screen selection.
 The web Clock page shows the same summary without expanding forecast details.
@@ -93,6 +98,10 @@ The bottom bar indicates unsaved changes; **Save settings** sends only changed
 fields, while **Discard** restores the last saved values without contacting the
 clock. Both buttons are inactive until something changes. On narrow screens,
 the groups stack and the action bar stays within reach while scrolling.
+Starting with beta.2, non-restarting saves read the settings back from the clock
+before showing **Saved**. A mismatch or failed read keeps your edits in the form
+with an error so you can retry. Network changes that restart the clock use its
+save acknowledgement without waiting for a readback.
 
 | Section | Controls |
 | --- | --- |

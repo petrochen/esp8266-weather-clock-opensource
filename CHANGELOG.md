@@ -16,7 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Replace unused stock updater HTML with a compact authenticated HTTP adapter;
   keep the ESP8266 core writer, defer commit until the full request, and reject
   interrupted or multiple-file uploads.
-- Keep memory budgets unchanged: 478,416-byte firmware, 38,832-byte static RAM.
+- Verify non-restarting settings saves by reading values back; retain edits and
+  show an error if the clock returns different values or cannot be reached.
+- Clarify that presets replace individual screen choices, mark manual adjustments
+  as Custom, and explain disabled screen options on the Clock page.
+- Keep memory budgets unchanged: 478,672-byte firmware, 38,832-byte static RAM.
 
 See [prepared beta.2 notes](docs/releases/v1.11.0-beta.2.md). Publication and physical
 OTA testing are pending.

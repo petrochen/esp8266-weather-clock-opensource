@@ -9,6 +9,7 @@ import gzip
 import hashlib
 from pathlib import Path
 import re
+import struct
 from playwright.sync_api import sync_playwright
 
 root = Path(__file__).resolve().parents[1]
@@ -41,6 +42,10 @@ pins = []
 api_status = deepcopy(status)
 upload_error = False
 config_error = False
+config_ignore = False
+config_read_error = False
+config_restart = False
+config_round_coordinates = False
 firmware = b'\xe9\x02\x02\x20' + (bytes(range(256)) * 1870)[:478380]
 firmware_digest = hashlib.sha256(firmware).hexdigest()
 catalog = dict(schema=1, target='esp01s-1m64-dio-80',
@@ -81,8 +86,14 @@ def route_request(route):
             if config_error:
                 route.fulfill(status=503, json={'error': 'Settings could not be saved. Try again.'})
             else:
-                config.update({k: v for k, v in request.post_data_json.items() if k not in ('password', 'clear_password')})
-                route.fulfill(json={'status': 'ok', 'restart': False})
+                if not config_ignore:
+                    config.update({k: v for k, v in request.post_data_json.items() if k not in ('password', 'clear_password')})
+                    if config_round_coordinates:
+                        for key in ('latitude', 'longitude'):
+                            config[key] = struct.unpack('f', struct.pack('f', config[key]))[0]
+                route.fulfill(json={'status': 'ok', 'restart': config_restart})
+        elif config_read_error:
+            route.fulfill(status=503, json={'error':'Readback unavailable'})
         else:
             route.fulfill(json=config)
     elif path == '/api/display':
@@ -426,6 +437,51 @@ with sync_playwright() as p:
     assert page.locator('#city').input_value() == 'Portimão'
     assert len(updates) == before_updates + 1
     page.locator('#discard-settings').click()
+    api_status.update(deepcopy(status))
+    # A successful POST alone must not turn unsaved screen choices into "Saved".
+    config['show_wind'] = False
+    open_page('/config')
+    page.locator('#settings-fields:not([disabled])').wait_for()
+    page.locator('#screen-preset').select_option('glance')
+    page.locator('#settings-fields details').evaluate_all('items => items.forEach(el => el.open = true)')
+    page.locator('[name=show_wind]').check()
+    assert page.locator('#screen-preset').input_value() == 'custom'
+    config_ignore = True
+    page.locator('#save-settings').click()
+    page.locator('#settings-result').filter(has_text='Some settings were not saved').wait_for()
+    assert page.locator('[name=show_wind]').is_checked() and page.locator('#save-settings').is_enabled()
+    assert not config['show_wind']
+    config_ignore = False; config_read_error = True
+    page.locator('#save-settings').click()
+    page.locator('#settings-result').filter(has_text='Could not verify saved settings').wait_for()
+    assert page.locator('[name=show_wind]').is_checked() and page.locator('#save-settings').is_enabled()
+    config_read_error = False
+    page.locator('#save-settings').click()
+    page.locator('#settings-result').filter(has_text='Saved.').wait_for()
+    assert config['show_wind'] and page.locator('#save-settings').is_disabled()
+    # Coordinates round to float32 on the ESP; this must not report a failed save.
+    config_round_coordinates = True
+    page.locator('#latitude').fill('89.1234567')
+    page.locator('#longitude').fill('-179.1234567')
+    page.locator('#save-settings').click()
+    page.locator('#settings-result').filter(has_text='Saved.').wait_for()
+    assert config['longitude'] != -179.1234567 and page.locator('#save-settings').is_disabled()
+    config_round_coordinates = False
+    # Network changes reboot immediately: a readback would fail after a good save.
+    config_restart = True; config_read_error = True
+    page.locator('[name=hostname]').fill('bedroom-clock')
+    before_reads = calls.count(('GET', '/api/config'))
+    page.locator('#save-settings').click()
+    page.locator('#settings-result').filter(has_text='Clock restarting').wait_for()
+    assert calls.count(('GET', '/api/config')) == before_reads
+    config_restart = False; config_read_error = False
+    # The main page respects the availability returned after settings are saved.
+    api_status['display']['available'][6] = True
+    open_page('/')
+    assert not page.locator('#active-screen option[value="6"]').is_disabled()
+    page.locator('#active-screen').select_option('6')
+    page.locator('#screen-result').filter(has_text='selected and held').wait_for()
+    assert api_status['display']['screen'] == 6
     api_status.update(deepcopy(status))
     # No overflow on narrow phones, with the same real HTML/CSS/JS.
     for width in (320, 390, 640, 768, 900):

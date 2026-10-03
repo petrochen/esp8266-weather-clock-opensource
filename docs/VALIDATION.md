@@ -3,10 +3,10 @@
 ## 1.11.0-beta.2 local validation
 
 Prepared on 2026-10-03; not yet published or flashed. The pinned isolated Linux
-build passed with **478,416 bytes** (816 bytes below the same OTA limit), **38,832
+build passed with **478,672 bytes** (560 bytes below the same OTA limit), **38,832
 bytes static RAM** and **62,007 / 65,536 instruction bytes including cache**.
-The embedded web page is 58,803 bytes before gzip and 18,060 bytes in flash.
-Firmware is 208 bytes smaller than beta.1 despite the added browser updater.
+The embedded web page is 59,519 bytes before gzip and 18,329 bytes in flash.
+Firmware is 48 bytes larger than beta.1 with the browser updater and verified saves.
 
 Passed: all host regressions; the new HTTP update harness with ASan/UBSan;
 browser SHA-256 comparisons against Node crypto through 479,232 bytes; semantic
@@ -16,6 +16,14 @@ HTTP hashing, PIN-before-download, corrupt/oversized downloads, local fallback a
 credential isolation. An actual browser successfully fetched a public raw GitHub
 file from an insecure HTTP origin. Both existing public release images were
 staged locally and matched their metadata and SHA-256 digests.
+
+Additional settings regressions passed for mismatched readback after an OK POST,
+unavailable readback, retry, float32 coordinate rounding, restart without readback
+and saved screen availability. Preset explanations and the laptop layout passed.
+On the user's installed early beta.1, enabling the weather pages restored rotation;
+the user confirmed the physical display changed. Toggling Wind off/on through
+the real browser form and reloading retained both saves. This verifies the installed
+build's current behavior, not the new beta.2 code; the original reset was not reproduced.
 
 Embedded-asset reproducibility, script syntax, workflow YAML parsing and diff
 whitespace checks passed. The new publication workflow has not run on GitHub;
