@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.11.0-beta.1] - Unreleased
+## [1.11.0-beta.1] - 2026-10-03 (pre-release)
 
 - Add optional combined clock/weather, outdoor comfort, hourly rain, two-day
   min/max/UV, wind direction, moon and next-sun-event countdown.
@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recover flash through pinned build-time minification and compact setup portal
   resources; add regressions and 320 native OLED renders.
 
-See [beta release notes](docs/releases/v1.11.0-beta.1.md). Prepared locally; physical
+See [beta release notes](docs/releases/v1.11.0-beta.1.md). Published as a pre-release; physical
 OTA, provisioning and long-running beta validation are still pending.
 
 ## [1.10.0] - 2026-10-03

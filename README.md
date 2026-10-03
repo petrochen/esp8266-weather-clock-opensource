@@ -22,7 +22,7 @@ I bought a cute weather clock kit from AliExpress ([TJ-56-654](https://pt.aliexp
 *An early look at the 1.11 beta, rendered by the firmware with sample data.
 [Still image](images/clock-demo-poster.png) · [All screens](docs/OLED_PREVIEWS.md).*
 
-**Want to use it?** Start with the [installation guide](docs/INSTALLATION.md), grab a published binary from [Releases](https://github.com/petrochen/esp8266-weather-clock-opensource/releases), or read [what's new in 1.10.0](docs/releases/v1.10.0.md). The last published stable release is **1.10.0**. This source tree prepares **[1.11.0-beta.1](docs/releases/v1.11.0-beta.1.md)**; its notes separate completed checks from hardware testing still to do.
+**Want to use it?** Start with the [installation guide](docs/INSTALLATION.md), grab a published binary from [Releases](https://github.com/petrochen/esp8266-weather-clock-opensource/releases), or read [what's new in 1.10.0](docs/releases/v1.10.0.md). The last published stable release is **1.10.0**. Try **[1.11.0-beta.1](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.0-beta.1)** as a pre-release; this source tree targets that version and its notes separate completed checks from hardware testing still to do.
 
 **Here for the story?** Read on.
 
@@ -93,8 +93,8 @@ per-screen timing and optional night dimming keep these useful on a tiny screen.
 Home Assistant can send a room reading as a short card that expires automatically.
 The compact web panel gains import preview, city search and display controls.
 
-The beta is prepared locally, not yet published or hardware-validated. Existing
-settings and PINs are preserved; the new pages are opt-in. Details belong in the
+The beta is available as a [pre-release](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.0-beta.1) for testing;
+physical hardware validation is still pending. Existing settings and PINs are preserved; the new pages are opt-in. Details belong in the
 [beta notes](docs/releases/v1.11.0-beta.1.md) and [integration guide](docs/HOME_ASSISTANT.md).
 
 ### What's new in 1.10.0?

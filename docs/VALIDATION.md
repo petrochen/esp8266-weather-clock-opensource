@@ -1,6 +1,6 @@
 # Build, validation and upgrade notes
 
-## Prepared 1.11.0-beta.1 results
+## 1.11.0-beta.1 pre-release validation
 
 Local checks completed on 2026-10-03 using the pinned toolchain below:
 
@@ -20,7 +20,7 @@ Local checks completed on 2026-10-03 using the pinned toolchain below:
 
 The binary was built in an isolated Linux ARM container from a frozen source
 snapshot, with Arduino CLI 1.4.1/core 3.1.2 and the pinned libraries. The final
-source identity and SHA-256 are included with the local release package. The
+source identity and SHA-256 are included with the release package. The
 small remaining OTA margin is a measured build limit, not a live free-space probe.
 Do not add dependencies or increase memory budgets to hide a size regression.
 
@@ -28,9 +28,9 @@ No beta was flashed. A read-only status check reached the user's existing 1.10.0
 clock (time synchronized, valid cached weather); that does **not** validate this
 beta. Physical OTA, captive-portal provisioning, OLED appearance/brightness,
 Home Assistant end-to-end operation and a 24-hour soak remain pending. The
-updated GitHub workflow has not run on this unpublished branch. The online beta
-integration-guide link becomes available only after the beta tag/docs are pushed;
-the same guide is included locally now.
+[GitHub Actions history](https://github.com/petrochen/esp8266-weather-clock-opensource/actions?query=branch%3Acodex%2Fweather-clock-beta)
+records the release commit's automated checks separately from these local results.
+The beta tag includes the integration guide, source and all README demo assets.
 
 
 ## Reproducible build

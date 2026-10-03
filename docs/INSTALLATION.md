@@ -2,9 +2,9 @@
 
 ## Source version and beta builds
 
-This source tree targets **1.11.0-beta.1**, prepared for testing. The last published
-stable release is **1.10.0**. A local build/package does not mean a beta has been
-published or tested on hardware. See the [beta notes](releases/v1.11.0-beta.1.md)
+This source tree targets **[1.11.0-beta.1](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.0-beta.1)**,
+a pre-release for testing. The latest stable release remains **1.10.0**.
+Publishing the beta does not mean it has completed hardware validation. See the [beta notes](releases/v1.11.0-beta.1.md)
 for compatibility and remaining checks. It uses the same single Firmware `.bin`
 and existing PIN, without a filesystem upload or factory reset.
 
