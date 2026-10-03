@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "target": "esp01s-1m64-dio-80",
+  "stable": {
+    "version": "1.10.0",
+    "size": 474304,
+    "sha256": "62708d6927c9e11dd6bf77892dbc7db99c1163308ce46e95ce827e7c70d844a0"
+  }
+}
