@@ -56,6 +56,8 @@ builds; they were not separate published releases. The previous public release i
 
 ### Fixed
 
+- Normalize the gzip OS marker so embedded web assets pass consistency checks
+  across Python versions and build hosts.
 - Weather recovery after HTTP/JSON/open errors and watchdog timeout; retry bursts
   return to normal scheduling and cancel stalled transport.
 - NTP startup DNS recovery, duplicate requests, late DNS callbacks and clock rollover.
