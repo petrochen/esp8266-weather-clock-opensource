@@ -23,6 +23,12 @@ runs host and browser regressions, the firmware build and size budgets. Successf
 runs attach a version/commit-named binary, SHA256SUMS and build information. The
 workflow does not flash a device or publish a release.
 
+The CLI install uses `--no-deps` with the complete ESP8266 library list above.
+Otherwise installing SSD1306 can silently replace the requested GFX 1.12.4 with a
+newer dependency version. The OLED regression runner verifies the installed GFX
+version before rendering. The first v1.10.0 CI build allowed this replacement;
+the refreshed build corrects it.
+
 ```sh
 python3 tools/embed_web.py --check
 arduino-cli compile \

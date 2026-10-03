@@ -33,6 +33,8 @@ the v1.10.0 release number. The release gallery includes all 408 before/after re
 - Add reproducible OLED previews using the real Adafruit_GFX rasterizer: 204
   screen/orientation combinations, clipping checks, UTF-8 and name-length cases,
   optional sanitizers, and a generated gallery. Run these checks in CI.
+- Prevent the dependency installer from silently replacing the pinned GFX version;
+  the firmware build and OLED previews now enforce the same 1.12.4 library.
 
 ### Added
 

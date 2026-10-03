@@ -16,7 +16,7 @@ jobs:
           arduino-cli config add board_manager.additional_urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
           arduino-cli core update-index
           arduino-cli core install esp8266:esp8266@3.1.2
-          arduino-cli lib install 'Adafruit BusIO@1.17.4' 'Adafruit GFX Library@1.12.4' 'Adafruit SSD1306@2.5.16' 'ArduinoJson@7.4.2' 'WiFiManager@2.0.17' 'ESPAsyncTCP@1.2.4' 'AsyncHTTPRequest_Generic@1.13.0'
+          arduino-cli lib install --no-deps 'Adafruit BusIO@1.17.4' 'Adafruit GFX Library@1.12.4' 'Adafruit SSD1306@2.5.16' 'ArduinoJson@7.4.2' 'WiFiManager@2.0.17' 'ESPAsyncTCP@1.2.4' 'AsyncHTTPRequest_Generic@1.13.0'
       - name: Host regressions
         run: python3 tests/run_host_tests.py --arduinojson "$HOME/Arduino/libraries/ArduinoJson/src"
       - name: OLED raster regressions
