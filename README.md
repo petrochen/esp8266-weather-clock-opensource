@@ -11,661 +11,139 @@
     <img src="https://img.shields.io/github/issues/petrochen/esp8266-weather-clock-opensource?style=flat-square&label=Issues&color=orange" alt="Issues">
   </a>
   <img src="https://img.shields.io/badge/ESP8266-ESP--01S-blue?style=flat-square" alt="Hardware">
-  <img src="https://img.shields.io/badge/Status-Production%20Ready-brightgreen?style=flat-square" alt="Status">
 </p>
 
 ## TL;DR
 
-I bought a cute weather clock kit from AliExpress ([TJ-56-654](https://pt.aliexpress.com/item/1005008333782531.html)) and discovered it was **leaking my WiFi password in plaintext** to anyone within radio range. So I ripped out the firmware, wrote my own, and ended up with a fully async, OTA-updatable, Home Assistant-ready smart clock that's actually secure.
+I bought a cute weather clock kit from AliExpress ([TJ-56-654](https://pt.aliexpress.com/item/1005008333782531.html)) and discovered it was **leaking my WiFi password in plaintext** to anyone within radio range. So I ripped out the firmware, wrote my own, and ended up with a clock I could inspect, configure and update over WiFi. No weather API key required. No WiFi password on the settings page.
 
----
+**Want to use it?** Start with the [installation guide](docs/INSTALLATION.md), grab a published binary from [Releases](https://github.com/petrochen/esp8266-weather-clock-opensource/releases), or read [what's new in 1.10.0](docs/releases/v1.10.0.md). This source tree targets **1.10.0**; the release notes distinguish completed checks from hardware testing still to do.
 
-## Table of Contents
+**Here for the story?** Read on.
 
-**Story**
-
-- [The Discovery: When "Smart" Means "Insecure"](#the-discovery-when-smart-means-insecure)
-- [The Device](#the-device)
-- [The Investigation](#the-investigation)
-- [The Solution: Custom Firmware](#the-solution-custom-firmware)
-- [Hardware Quirk: Swapped I2C Pins](#hardware-quirk-swapped-i2c-pins)
-- [Version History](#version-history)
-
-**Use it**
-
-- [How to Flash This Firmware](#how-to-flash-this-firmware)
-- [Web Interface](#web-interface)
-- [API Documentation](#api-documentation)
-- [Testing](#testing)
-- [Security Improvements](#security-improvements)
-- [Project Structure](#project-structure)
-
-For internal architecture notes (state machines, memory, EEPROM layout), see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
----
+- [The discovery](#the-discovery-when-smart-means-insecure)
+- [The investigation](#the-investigation)
+- [The solution](#the-solution-custom-firmware)
+- [Try it on your clock](#try-it-on-your-clock)
+- [Security, without the marketing](#security-without-the-marketing)
+- [Documentation & contributing](#documentation--contributing)
 
 ## The Discovery: When "Smart" Means "Insecure"
 
-It started innocently enough. I ordered what looked like a fun DIY electronics project: an ESP8266-based weather clock with a transparent acrylic case and an OLED display. The listing promised:
+It started innocently enough. I ordered what looked like a fun DIY electronics project: an ESP8266-based weather clock with a transparent acrylic case and an OLED display. The listing promised WiFi weather updates, a three-day forecast, temperature, humidity and date/time. All for about €5.
 
-- ✅ WiFi weather updates
-- ✅ 3-day forecast
-- ✅ Temperature, humidity, date/time
-- ✅ "Intelligent connected to WIFI"
+What it didn't mention was the setup page.
 
-What they didn't mention:
+You connected to the device's access point, entered your home WiFi credentials, and the clock joined your network. Fair enough. Except **the setup AP stayed active in parallel, and the configuration page displayed the WiFi password in plaintext**.
 
-**🚨 CRITICAL SECURITY FLAW 🚨**
+Anyone nearby who could join that AP using its default password could open `192.168.4.1`, read the credentials and join the home network. This is a textbook example of poor IoT security design. No thanks.
 
-When you first set up the device, it creates an access point with a default password. Fair enough - that's how WiFiManager works. But here's where it gets bad:
-
-1. You connect to the AP (192.168.4.1)
-2. You configure your home WiFi credentials
-3. Device connects to your network
-4. **The open AP stays active in parallel**
-5. **Your WiFi password is displayed in plaintext on the config page**
-
-Anyone within WiFi range could:
-
-- Connect to the device's AP (weak default password)
-- Browse to 192.168.4.1
-- Read your WiFi password in plaintext
-- Access your network
-
-This is a textbook example of poor IoT security design. No thanks.
-
----
-
-## The Device
-
-**Product**: ESP8266 Mini Weather Clock Kit
-**Model**: TJ-56-654
-**Price**: ~€5 EUR
-**Source**: [AliExpress Link](https://pt.aliexpress.com/item/1005008333782531.html)
-
-### Original Hardware Specifications
-
-| Component   | Details                                  |
-| ----------- | ---------------------------------------- |
-| **MCU**     | ESP-01S (ESP8266EX, 1MB flash, 80KB RAM) |
-| **Display** | GM009605v4.3 OLED (128x64, I2C)          |
-| **Power**   | 5V USB (Micro-USB)                       |
-| **Case**    | Transparent acrylic (40x40x43mm)         |
-| **PCB**     | TJ-56-654 main board                     |
-
-### What It Came With
-
-- Acrylic case parts (6 pieces)
-- ESP-01S WiFi module
-- OLED display module
-- Main PCB with headers
-- USB power cable
-- Brass standoffs and screws
-- Pin headers (soldering required)
-
-### Original Firmware Issues
-
-Beyond the password leak:
-
-- **Dependency on QWeather API**: Requires account registration, project setup, API key management
-- **Chinese cloud service**: All weather data routes through proprietary servers
-- **No OTA updates**: Firmware updates require disassembly and FTDI connection
-- **Limited features**: Fixed display modes, no customization
-- **Unknown code**: Closed-source firmware, no way to audit what it's doing
-
----
+The original firmware also depended on a QWeather account and API key, offered little customization, and had no OTA update path I could use. Closed-source firmware made it hard to find out what else was going on.
 
 ## The Investigation
 
-### Opening It Up
+The transparent case made inspection easy — just unscrew the brass standoffs. Inside was a socketed ESP-01S, a four-wire OLED display and no local temperature or humidity sensor. Those readings came from the weather service.
 
-The transparent case made inspection easy - just unscrew the brass standoffs. Inside:
+| Part | What I found |
+| --- | --- |
+| Board | TJ-56-654 |
+| MCU | ESP-01S / ESP8266EX, 1MB flash |
+| Display | GM009605v4.3, 128×64 I²C OLED; SSD1306 driver |
+| Power | 5V Micro-USB to the board; **3.3V at the ESP-01S** |
+| Case | Transparent acrylic, about 40×40×43mm |
 
-- **ESP-01S module** clearly labeled with pinout
-- **I2C OLED display** connected via 4 pins (VCC, GND, SDA, SCL)
-- **No additional sensors** (temperature/humidity were from weather API, not local)
+A 3.3V USB-to-serial adapter and a few jumper wires were enough for the first flash. The ESP-01S comes out of its socket, so there is no need to solder programming wires to the board. After that, updates can happen over WiFi. The [flashing guide](docs/INSTALLATION.md#hardware-connection) has the wiring and boot-mode steps.
 
-The ESP-01S pinout is printed right on the PCB:
+One hardware quirk cost more time than it should have: **the I²C pins aren't the ones most ESP8266 examples use**.
 
-```
-3V3  |  GND
- TX  |  GPIO0  (I2C SDA)
- RX  |  GPIO2  (I2C SCL)
-EN   |  GND
-```
-
-### Connecting FTDI
-
-To flash custom firmware, you need:
-
-1. **FTDI USB-to-Serial adapter** (3.3V! Not 5V - you'll fry the ESP8266)
-2. **Jumper wires**
-3. **Steady hands**
-
-**Wiring:**
-
-```
-FTDI        ESP-01S
-────────────────────
- 3V3    →   3V3
- GND    →   GND
- TX     →   RX
- RX     →   TX
- GND    →   GPIO0  (for programming mode)
+```cpp
+Wire.begin(0, 2);  // SDA=GPIO0, SCL=GPIO2 on this board
 ```
 
-**Boot into flash mode:**
-
-1. Connect GPIO0 to GND
-2. Power on the device
-3. Remove GPIO0 to GND connection after boot
-4. Device is now in programming mode
-
-**Programming:**
-
-- Use Arduino IDE with ESP8266 board support
-- Select board: "Generic ESP8266 Module"
-- Flash size: 1MB (FS:64KB OTA:~470KB)
-- Upload speed: 115200 baud
-
-After the first flash with OTA support, you never need wires again - all updates happen over WiFi.
-
----
+The display is normally at `0x3C`; the firmware also tries `0x3D`. If you're porting this to another board, start with the [hardware notes](docs/HARDWARE.md).
 
 ## The Solution: Custom Firmware
 
-I decided to write a complete replacement firmware with:
+I decided to write a replacement I could understand and keep improving. The goal was still a small clock on a desk — not another cloud account to maintain.
 
-### Core Principles
+| Feature | What it does |
+| --- | --- |
+| 🌐 Time & connection | WiFi setup portal, asynchronous NTP/DNS, reconnect backoff, configurable timezone and European DST rules |
+| 🌦️ Weather | Open-Meteo temperature, condition icons, wind and calculated sunrise/sunset; no API key |
+| 📺 Display | Rotating time, weather and sun screens; brightness, orientation and an optional night schedule |
+| 🔄 Updates | Browser upload with a six-digit PIN; ArduinoOTA remains available |
+| 🖥️ Web interface | Compact English desktop/mobile panel with grouped settings, Save/Discard, PIN updates and on-demand diagnostics |
+| 🔌 Integrations | Local JSON API for time, weather, settings and device status |
 
-1. **Security First**: No hardcoded credentials, no open networks, WiFiManager with proper AP timeout
-2. **Privacy**: Use free, open APIs (Open-Meteo instead of QWeather)
-3. **Maintainability**: OTA updates for painless improvements
-4. **Performance**: Fully async architecture, no blocking operations
-5. **Reliability**: Proper error handling, exponential backoff, memory safety
+Weather failures keep the last good reading, marked as stale. Time and weather requests recover through bounded retries. The clock can show an unsynchronized-time placeholder instead of pretending an epoch is the current time.
 
-### Features Implemented
+The web page is compressed in flash, with no framework, external font or separate filesystem image. Seconds tick in the browser; the visible dashboard requests fresh data once a minute. The network state machines are asynchronous, but startup provisioning, HTTP serving, OLED transfers and firmware updates still have synchronous work. It's a small ESP8266, not a promise of zero blocking.
 
-#### 🌐 Network & Time
+### What's new in 1.10.0?
 
-- **WiFiManager** captive portal for secure first-time setup
-- **Hybrid WiFi**: Synchronous on boot (ensures proper init), async reconnect during operation
-- **NTP time sync** with configurable server and interval
-- **Timezone support** with automatic European DST calculation
-- **mDNS**: Access via `http://tj56654-clock.local/`
+The latest work brings **PIN-only updates**, a redesigned web interface, optional night mode, saved orientation before the startup screen, and small weather icons with corrected condition mapping. It also fixes weather/DNS recovery, empty uploads and the zero-brightness regression from an intermediate development build.
 
-#### 🌦️ Weather Data
+The PIN appears on the physical display only when requested. There is no PIN screen or extra waiting period at startup. Night mode is off by default; showing a PIN temporarily wakes the display.
 
-- **Open-Meteo API**: Free, no registration, no API key
-- **Configurable location**: Latitude/longitude + city name
-- **Data**: Temperature, sunrise, sunset, daylight duration
-- **Smart updates**: Async fetch every 30 minutes (configurable)
+I redrew the weather icons pixel by pixel. At **16×16**, a filled cloud looked more like a blob, so it now has a hollow outline; rain, snow and lightning have distinct shapes. All eight icons together use **256 bytes in flash**.
 
-#### 🔄 OTA Updates
+[![Eight native 16×16 weather icons: clear, partly cloudy, overcast, fog, rain, snow, thunderstorm and unknown](images/weather-icons-strip.png)](images/weather-icons.png)
 
-- **Web-based OTA**: Upload .bin files via browser at `/update`
-- **ArduinoOTA**: Update directly from Arduino IDE
-- **Non-blocking**: System stays responsive during updates
-- **Secure**: Password-protected upload (admin/admin - change it!)
+*Enlarged without smoothing, with native-size samples underneath. Click for the before/after comparison and full OLED layouts.*
 
-#### 📺 Display Modes
+Four improvements were adapted from Stibax's fork, while retaining this project's newer network and settings code. See the [backport notes](docs/BACKPORTS.md), [release notes](docs/releases/v1.10.0.md) and [full changelog](CHANGELOG.md).
 
-Three rotating display screens (configurable interval):
+For future release notifications, choose **Watch → Custom → Releases** on GitHub.
 
-1. **Time Mode**
-   - Large HH:MM display
-   - Blinking colon animation
-   - Day of week and date
-   - 12/24 hour format support
+## Try It on Your Clock
 
-2. **Weather Mode**
-   - Temperature with superscript °c
-   - City name
-   - Clean, minimalist layout
+**First installation:** use a **3.3V** USB-to-serial adapter and the [installation guide](docs/INSTALLATION.md). The build target is Generic ESP8266, **1MB / 64KB filesystem, DIO, 80MHz**. The ESP-01S itself is not 5V tolerant.
 
-3. **Sunrise/Sunset Mode**
-   - Sunrise time with ↑ arrow
-   - Sunset time with ↓ arrow
-   - **Daylight duration** (e.g., "Day 9h 41m")
+After flashing, connect to **TJ56654-Setup** with the setup password `12345678`, then open `http://192.168.4.1` and choose your 2.4GHz WiFi network. Once connected, use the address shown by your router or `http://tj56654-clock.local/` where mDNS is available.
 
-All modes are center-aligned, rotation-aware, and gracefully handle missing data.
+**Already running this firmware?** Open `/update`, choose the clock's `.bin`, press **Show PIN on clock**, enter the six digits, then choose **Upload & restart**. The current installed version handles that first upload, so an older version can still require its existing login/code. The new page appears after the update.
 
-#### 🌐 Web Interface
+The normal update needs **one firmware file**. The web interface is inside it; leave the advanced Filesystem option alone unless you have a separate filesystem image for a specific reason.
 
-- `/` - Home page with live time
-- `/config` - Full configuration form
-- `/debug` - System diagnostics
-- `/update` - OTA firmware upload
+Settings live at `/config`. Display, location, intervals and night mode apply when saved; changes to WiFi credentials, hostname or NTP server restart the clock. See the [user guide](docs/USAGE.md) for schedules, PINs, recovery and settings backup.
 
-#### 🔌 REST API
+## Security, Without the Marketing
 
-All endpoints return JSON:
+The original leak was the reason for this project, so the distinction matters:
 
-- `GET /api/time` - Current time
-- `GET /api/status` - System status (WiFi, uptime, heap)
-- `GET /api/debug` - Detailed diagnostics
-- `GET /api/weather` - Weather + sunrise/sunset
-- `GET /api/config` - Export configuration
-- `POST /api/config` - Import configuration
-- `POST /api/eeprom-clear` - Factory reset
-- `POST /api/reboot` - Remote reboot
+- **WiFi passwords stay out of the settings page, JSON export and application logs.** A blank password field keeps the saved password.
+- **Updates, restart and full reset need the device's PIN.** It is random, stored across restarts and updates, and shown only on the OLED when requested.
+- **Ordinary settings and read-only APIs are open on the local network.** That's intentional for these home clocks.
+- **This is local HTTP, not HTTPS.** The setup/recovery AP has a shared default password, and secrets are stored on the device without encryption. Keep these interfaces on a trusted network; the PIN is not Internet-facing authentication.
 
----
+Normal operation uses station mode. Setup or connection failure can enable an AP; the 180-second WiFiManager portal timeout is not a timeout for every fallback AP. Details and recovery paths are in the [installation guide](docs/INSTALLATION.md#recovery-and-reset).
 
-## Hardware Quirk: Swapped I2C Pins
+## Documentation & Contributing
 
-ESP-01S exposes only GPIO0 and GPIO2. The TJ-56-654 board designer used them as I2C — but **swapped from typical breakouts**:
+The README tells the story. These pages hold the instructions and reference material:
 
-```cpp
-Wire.begin(0, 2);  // SDA=GPIO0, SCL=GPIO2 (non-standard!)
-```
+| If you want to… | Read |
+| --- | --- |
+| Install, update or recover a clock | [Installation](docs/INSTALLATION.md) |
+| Use the web pages, night schedule and PIN | [User guide](docs/USAGE.md) |
+| Connect scripts or a home automation system | [API reference](docs/API.md) |
+| Check wiring and memory layout | [Hardware](docs/HARDWARE.md) |
+| Understand timers, state machines and storage | [Architecture](docs/ARCHITECTURE.md) |
+| Build, test or prepare a release | [Contributing](CONTRIBUTING.md) and [validation](docs/VALIDATION.md) |
+| See changes and their sources | [Changelog](CHANGELOG.md) and [fork backports](docs/BACKPORTS.md) |
 
-Standard ESP8266 boards use GPIO4=SDA, GPIO5=SCL. Easy to miss if you're porting code from a different ESP8266 setup. The display is a GM009605v4.3 OLED (SSD1306-compatible) at I2C address 0x3C.
-
-For architecture details (async state machines, memory budget, EEPROM layout, factory reset), see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-## Version History
-
-The clock has gone through many iterations — display hardware discovery (v1.5–v1.7), stability and security fixes (v1.8), full async refactor (v1.9.0), and a long series of bug fixes informed by community reports and AI-assisted code review (v1.9.1–v1.9.10).
-
-See [CHANGELOG.md](CHANGELOG.md) for the full version history with technical details.
-
----
-
-## How to Flash This Firmware
-
-### Requirements
-
-- **Hardware**: TJ-56-654 weather clock or compatible ESP-01S + OLED setup
-- **FTDI Adapter**: 3.3V USB-to-Serial (CP2102, FT232RL, CH340)
-- **Software**: Arduino IDE 1.8.x or 2.x
-
-### Arduino IDE Setup
-
-1. **Install ESP8266 Board Support**
-   - File → Preferences
-   - Additional Board Manager URLs: `http://arduino.esp8266.com/stable/package_esp8266com_index.json`
-   - Tools → Board → Boards Manager → Search "ESP8266" → Install
-
-2. **Install Required Libraries**
-   - Sketch → Include Library → Manage Libraries
-   - Install:
-     - `Adafruit GFX Library`
-     - `Adafruit SSD1306`
-     - `NTPClient`
-     - `WiFiManager` (by tzapu)
-     - `AsyncHTTPRequest_Generic`
-     - `ESPAsyncTCP`
-     - `ArduinoJson` (by Benoit Blanchon)
-
-3. **Board Configuration**
-   - Board: "Generic ESP8266 Module"
-   - Flash Size: "1MB (FS:64KB OTA:~470KB)"
-   - Flash Mode: "DIO"
-   - Flash Frequency: "40MHz"
-   - CPU Frequency: "80MHz"
-   - Upload Speed: "115200"
-
-### First Flash (via FTDI)
-
-1. **Wire the ESP-01S**:
-
-   ```
-   FTDI 3.3V  →  ESP-01S 3V3
-   FTDI GND   →  ESP-01S GND
-   FTDI TX    →  ESP-01S RX
-   FTDI RX    →  ESP-01S TX
-   FTDI GND   →  ESP-01S GPIO0 (boot mode)
-   ```
-
-2. **Compile and Upload**:
-   - Open `weather_clock.ino`
-   - Sketch → Upload
-   - Wait for "Done uploading"
-   - Remove GPIO0-to-GND jumper
-   - Press reset or power cycle
-
-3. **Initial Setup**:
-   - Device creates AP: "TJ56654-Setup"
-   - Connect to it (password: `12345678`)
-   - Captive portal opens automatically
-   - Select your WiFi network and enter password
-   - Device reboots and connects
-
-### Subsequent Updates (OTA)
-
-1. **Via Web Interface** (easiest):
-   - Browse to `http://192.168.x.x/update` (find IP from router)
-   - Or use mDNS: `http://tj56654-clock.local/update`
-   - Login: `admin` / `admin`
-   - Choose .bin file from `build/` folder
-   - Click "Update"
-   - Device reboots automatically (~15 seconds)
-
-2. **Via Arduino IDE**:
-   - Tools → Port → Select "tj56654-clock at 192.168.x.x"
-   - Sketch → Upload
-   - No wires needed!
-
----
-
-## Web Interface
-
-### Home Page (`/`)
-
-Current time display with live updates via JavaScript (fetches `/api/time` every second).
-
-### Configuration Page (`/config`)
-
-Comprehensive settings form:
-
-**WiFi Settings**
-
-- SSID
-- Password
-- Hostname (for mDNS)
-
-**Time Settings**
-
-- Timezone offset (seconds from UTC)
-- DST enabled (European rules)
-- NTP server address
-- NTP sync interval (seconds)
-- Hour format (12h/24h)
-
-**Weather Settings**
-
-- Enabled/disabled toggle
-- Latitude
-- Longitude
-- City name (for display)
-- Update interval (seconds)
-
-**Display Settings**
-
-- Brightness (0-7)
-- Rotation (0°, 90°, 180°, 270°)
-- Display rotation interval (seconds)
-- Show weather screen (toggle)
-- Show sunrise/sunset screen (toggle)
-
-All settings persist to EEPROM and survive reboots.
-
-### Debug Page (`/debug`)
-
-Real-time diagnostics:
-
-- **System**: Uptime, free heap, chip ID, flash size
-- **WiFi**: SSID, IP, signal strength, MAC address, gateway, DNS
-- **Time**: Current time, timezone, DST status, NTP sync status
-- **NTP Stats**: Last sync, attempts, successes, failures
-- **Weather**: Temperature, sunrise/sunset, last update, API status
-- **Network Tests**: Internet connectivity, DNS resolution
-- **Display**: Current mode, rotation, brightness
-
-Perfect for troubleshooting connectivity or API issues.
-
----
-
-## API Documentation
-
-All endpoints return JSON (except `/update` which is for file upload).
-
-### `GET /api/time`
-
-Current time information.
-
-**Response:**
-
-```json
-{
-  "current": "14:23:45",
-  "date": "2026-01-03",
-  "day": "Friday",
-  "timezone_offset": 0,
-  "dst_active": false
-}
-```
-
-### `GET /api/status`
-
-System status overview.
-
-**Response:**
-
-```json
-{
-  "wifi": {
-    "ssid": "MyNetwork",
-    "ip": "192.168.1.47",
-    "rssi": -38,
-    "hostname": "tj56654-clock"
-  },
-  "time": {
-    "current": "14:23:45",
-    "timezone_offset": 0,
-    "ntp_synced": true
-  },
-  "system": {
-    "uptime": 3627,
-    "free_heap": 35104,
-    "chip_id": "f77134"
-  }
-}
-```
-
-### `GET /api/weather`
-
-Current weather data.
-
-**Response:**
-
-```json
-{
-  "temperature": 15.4,
-  "city": "Portimao",
-  "sunrise": "07:48",
-  "sunset": "17:29",
-  "daylight_hours": 9,
-  "daylight_minutes": 41,
-  "last_update": "14:20:00",
-  "valid": true
-}
-```
-
-### `GET /api/config`
-
-Export full configuration as JSON.
-
-**Response:**
-
-```json
-{
-  "ssid": "MyNetwork",
-  "timezone_offset": 0,
-  "dst_enabled": true,
-  "brightness": 5,
-  "ntp_server": "pool.ntp.org",
-  "ntp_interval": 3600,
-  "hour_format_24": true,
-  "hostname": "tj56654-clock",
-  "latitude": 37.19,
-  "longitude": -8.54,
-  "city_name": "Portimao",
-  "weather_enabled": true,
-  "weather_interval": 1800,
-  "display_rotation_sec": 5,
-  "show_weather": true,
-  "show_sunrise_sunset": true,
-  "display_orientation": 0
-}
-```
-
-### `POST /api/config`
-
-Import configuration from JSON.
-
-**Request Body**: Same structure as export response (password field optional for security).
-
-**Response:**
-
-```json
-{
-  "status": "ok"
-}
-```
-
-Device automatically reboots after import.
-
-### `POST /api/eeprom-clear`
-
-Factory reset (clears EEPROM).
-
-**Response:**
-
-```json
-{
-  "status": "cleared"
-}
-```
-
-Device reboots to WiFiManager captive portal.
-
-### `POST /api/reboot`
-
-Remote reboot.
-
-**Response:**
-
-```json
-{
-  "status": "rebooting"
-}
-```
-
-Device reboots immediately.
-
----
-
-## Security Improvements
-
-### What Changed from Original Firmware
-
-| Issue                  | Original                       | Custom Firmware                   |
-| ---------------------- | ------------------------------ | --------------------------------- |
-| **WiFi Password Leak** | Plaintext in open AP           | No open AP after setup            |
-| **Persistent AP**      | Always active                  | Only on first boot or failure     |
-| **API Keys**           | QWeather requires registration | Open-Meteo (no key needed)        |
-| **Cloud Dependency**   | Chinese servers                | Direct API calls, no intermediary |
-| **Firmware Updates**   | Manual FTDI only               | OTA via WiFi (password-protected) |
-| **Config Access**      | No authentication              | Admin password required           |
-| **Code Transparency**  | Closed source                  | Open source (you're reading it!)  |
-
-### Best Practices Implemented
-
-1. **WiFiManager Timeout**: AP automatically closes after 180 seconds if no configuration
-2. **Fallback AP Mode**: If credentials fail, device creates secure AP ("TJ56654-Clock" with password)
-3. **EEPROM Validation**: Magic number check prevents loading corrupted data
-4. **Input Sanitization**: Buffer overflow protection on all user inputs
-5. **Memory Safety**: No dynamic String allocations in loops, fixed-size buffers
-6. **Error Handling**: Graceful degradation (e.g., display shows time even if weather fails)
-
-### Recommended Post-Flash Steps
-
-1. **Change OTA password**: Edit line ~60 in `.ino` file:
-
-   ```cpp
-   ArduinoOTA.setPassword("admin");  // Change this!
-   ```
-
-2. **Change web admin password**: Edit line ~430:
-
-   ```cpp
-   if (!server.authenticate("admin", "admin")) {  // Change this!
-   ```
-
-3. **Set strong WiFi AP fallback password**: Edit line ~780:
-
-   ```cpp
-   WiFi.softAP("TJ56654-Clock", "12345678");  // Change this!
-   ```
-
-4. **Disable unnecessary features**: If you don't need weather, disable it in `/config` to save bandwidth
-
----
+Bug reports, tested fixes and small improvements are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md). Please distinguish a successful build from a successful test on the clock — both matter, and the [validation notes](docs/VALIDATION.md) record what has actually been checked.
 
 ## Credits
 
-**Hardware**: TJ-56-654 Weather Clock Kit ([AliExpress](https://pt.aliexpress.com/item/1005008333782531.html))
+**Hardware:** TJ-56-654 Weather Clock Kit. **Firmware:** written from scratch with love and frustration.
 
-**Firmware**: Written from scratch with love and frustration
+Built with [ESP8266 Arduino Core](https://github.com/esp8266/Arduino), [Adafruit GFX](https://github.com/adafruit/Adafruit-GFX-Library), [Adafruit SSD1306](https://github.com/adafruit/Adafruit_SSD1306), [WiFiManager](https://github.com/tzapu/WiFiManager), [ArduinoJson](https://github.com/bblanchon/ArduinoJson), [ESPAsyncTCP](https://github.com/me-no-dev/ESPAsyncTCP) and [AsyncHTTPRequest_Generic](https://github.com/khoih-prog/AsyncHTTPRequest_Generic). Weather comes from [Open-Meteo](https://open-meteo.com/).
 
-**Libraries Used**:
-
-- [ESP8266 Arduino Core](https://github.com/esp8266/Arduino)
-- [Adafruit SSD1306](https://github.com/adafruit/Adafruit_SSD1306)
-- [WiFiManager](https://github.com/tzapu/WiFiManager)
-- [AsyncHTTPRequest_Generic](https://github.com/khoih-prog/AsyncHTTPRequest_Generic)
-- [NTPClient](https://github.com/arduino-libraries/NTPClient)
-
-**APIs**:
-
-- [Open-Meteo](https://open-meteo.com/) - Free weather API, no registration required
-
-**Tools**:
-
-- Arduino IDE 2.x
-- FTDI FT232RL USB-to-Serial adapter
-- Lots of coffee ☕
-
----
-
-## Project Structure
-
-```
-esp8266-weather-clock/
-├── firmware/
-│   └── weather_clock/              # Modular firmware
-│       ├── weather_clock.ino       # setup() and loop()
-│       ├── config.h                # Config struct, EEPROM layout
-│       ├── globals.h               # Shared state
-│       ├── display.cpp             # OLED rendering
-│       ├── ntp_client.cpp          # Async NTP + DST
-│       ├── weather.cpp             # Open-Meteo API
-│       ├── web_server.cpp          # HTTP UI + REST API
-│       └── wifi_manager.cpp        # WiFi resilience
-├── tests/
-│   └── test_device.py              # HW-in-the-loop test suite (73 cases)
-├── docs/
-│   ├── HARDWARE.md                 # Hardware specifications
-│   └── INSTALLATION.md             # Flashing guide
-├── CHANGELOG.md                    # Version history
-└── README.md                       # This file
-```
-
-## Testing
-
-```bash
-# Hardware-in-the-loop test suite — verifies API, fuzzes config endpoint,
-# checks heap stability over 5 samples
-python3 tests/test_device.py 192.168.x.x
-```
-
-The test suite covers:
-
-- All REST API endpoints (functional validation)
-- Boundary fuzz against `/config` (oversized SSID, invalid intervals, etc.)
-- Malformed JSON fuzz against `/api/config` import
-- Heap stability check (must stay >20KB, drift <2KB across runs)
-
----
+Thanks to the people reporting bugs and sharing fixes in forks, especially Stibax for the [adapted improvements](docs/BACKPORTS.md). Tools of the trade: Arduino IDE, a USB-to-serial adapter, and lots of coffee ☕.
 
 ## License
 
-This project is released into the public domain. Do whatever you want with it. If you improve it, consider sharing your changes - that's how we make IoT better.
+[MIT](LICENSE). Do something useful with it, keep the license notice, and consider sharing your improvements — that's how we make IoT better.
 
----
-
----
-
-**Author**: apetrochenko · **License**: MIT · **Firmware**: v1.9.10
+**Author:** apetrochenko

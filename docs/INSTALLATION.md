@@ -11,6 +11,8 @@ Complete step-by-step guide to flash this firmware on your ESP8266 weather clock
 5. [Initial Configuration](#initial-configuration)
 6. [OTA Updates](#ota-updates)
 7. [Troubleshooting](#troubleshooting)
+8. [Recovery and reset](#recovery-and-reset)
+9. [Verifying installation](#verifying-installation)
 
 ---
 
@@ -46,12 +48,12 @@ Complete step-by-step guide to flash this firmware on your ESP8266 weather clock
 2. Go to: **File → Preferences**
 3. In "Additional Board Manager URLs", add:
    ```
-   http://arduino.esp8266.com/stable/package_esp8266com_index.json
+   https://arduino.esp8266.com/stable/package_esp8266com_index.json
    ```
 4. Click **OK**
 5. Go to: **Tools → Board → Boards Manager**
 6. Search: "ESP8266"
-7. Install: **esp8266 by ESP8266 Community** (version 3.0.0 or newer)
+7. Install: **esp8266 by ESP8266 Community** (version **3.1.2**, used for the verified build)
 8. Wait for installation to complete
 
 **Method 2: Manual Installation**
@@ -62,16 +64,10 @@ See: https://arduino-esp8266.readthedocs.io/en/latest/installing.html
 
 Go to: **Sketch → Include Library → Manage Libraries**
 
-Install the following libraries (search by name):
-
-| Library                      | Author           | Min Version | Purpose                       |
-| ---------------------------- | ---------------- | ----------- | ----------------------------- |
-| **Adafruit GFX Library**     | Adafruit         | 1.11.0      | Graphics primitives           |
-| **Adafruit SSD1306**         | Adafruit         | 2.5.0       | OLED display driver           |
-| **NTPClient**                | Fabrice Weinberg | 3.2.0       | NTP time sync (base)          |
-| **WiFiManager**              | tzapu            | 2.0.0       | Captive portal setup          |
-| **AsyncHTTPRequest_Generic** | Khoi Hoang       | 1.13.0      | Async weather fetch           |
-| **ESPAsyncTCP**              | me-no-dev        | 1.2.2       | Async TCP (required by above) |
+Install **Adafruit BusIO**, **Adafruit GFX Library**, **Adafruit SSD1306**,
+**WiFiManager**, **ArduinoJson**, **ESPAsyncTCP** and **AsyncHTTPRequest_Generic**.
+Use the exact versions listed in [Build validation](VALIDATION.md#reproducible-build)
+to reproduce the release. NTPClient is no longer used.
 
 **Installation steps for each library:**
 
@@ -90,14 +86,14 @@ Install the following libraries (search by name):
 
 | Setting           | Value                      | Why                                      |
 | ----------------- | -------------------------- | ---------------------------------------- |
-| Flash Size        | `1MB (FS:64KB OTA:~470KB)` | Enables OTA with 470KB max firmware      |
+| Flash Size        | `1MB (FS:64KB OTA:~470KB)` | Layout used by the verified OTA build      |
 | Flash Mode        | `DIO`                      | Compatible with most ESP-01S modules     |
 | Flash Frequency   | `40MHz`                    | Safe default for all ESP8266             |
 | CPU Frequency     | `80MHz`                    | Standard (can use 160MHz for more speed) |
 | Crystal Frequency | `26MHz`                    | Default for ESP-01S                      |
 | Upload Speed      | `115200`                   | Balance between speed and reliability    |
 | Debug Level       | `None`                     | Reduces firmware size                    |
-| IwIP Variant      | `v2 Lower Memory`          | Better for 1MB flash devices             |
+| lwIP Variant      | `v2 Lower Memory`          | Better for 1MB flash devices             |
 | Erase Flash       | `Only Sketch`              | Preserves config on re-flash             |
 
 ---
@@ -106,20 +102,9 @@ Install the following libraries (search by name):
 
 ### Step 1: Identify Pins
 
-ESP-01S pinout (looking at module from top, antenna up):
-
-```
-       ┌─────────────┐
-       │             │
-       │  [antenna]  │
-       │             │
-3V3 ━━━━━━━━━━━━━━━━━ GND
- TX ━━━━━━━━━━━━━━━━━ GPIO0
- RX ━━━━━━━━━━━━━━━━━ GPIO2
- EN ━━━━━━━━━━━━━━━━━ GND
-       │             │
-       └─────────────┘
-```
+Use the labels on your module/adapter rather than assuming a header orientation.
+Identify **3V3, GND, TX, RX and GPIO0** before connecting power. See the
+[hardware pin functions](HARDWARE.md#pin-functions) and module documentation.
 
 ### Step 2: Wire FTDI to ESP-01S
 
@@ -185,8 +170,9 @@ If port doesn't appear:
    Global variables use Y bytes (Y%) of dynamic memory.
    ```
 4. Verify:
-   - Program storage < 470KB (for OTA to work)
-   - IRAM usage < 95% (shown in verbose output)
+   - The resulting `.bin` is at most **479232 bytes**, the project's conservative OTA budget
+   - Instruction RAM plus its 32KB cache stays below **95% of 65536 bytes**
+   - Use the [build-size checker](VALIDATION.md#reproducible-build) for exact results
 
 ### Step 4: Upload Firmware
 
@@ -239,9 +225,8 @@ If port doesn't appear:
 1. Click: **Configure WiFi**
 2. Select your home network from the list
 3. Enter WiFi password
-4. (Optional) Set custom hostname
-5. Click: **Save**
-6. Device reboots and connects to your WiFi
+4. Click: **Save**
+5. The clock continues startup on your WiFi. Set its device name later in Settings.
 
 ### Step 4: Find Device IP
 
@@ -255,7 +240,7 @@ If port doesn't appear:
 
 - Browse to: http://tj56654-clock.local/
 - Works on macOS, Linux, iOS out-of-box
-- Windows: Install [Bonjour Print Services](https://support.apple.com/kb/DL999)
+- If name resolution is unavailable, use the numeric IP address from your router.
 
 **Method 3: Serial Monitor**
 
@@ -269,27 +254,18 @@ If port doesn't appear:
 
 Browse to: `http://<device-ip>/` or `http://tj56654-clock.local/`
 
-You should see:
-
-- Current time display
-- Navigation links (Config, Debug, Update)
+You should see **Clock**, **Settings** and **Update** navigation, with time and
+weather on the home page. **Device details** contains diagnostics and tests.
 
 ### Step 6: Configure Settings
 
-1. Go to: `http://<device-ip>/config`
-2. Configure:
-   - **Timezone offset** (in seconds from UTC)
-   - **DST enabled** (for European DST rules)
-   - **Weather location** (latitude, longitude, city name)
-   - **Display settings** (brightness, rotation interval)
-3. Click: **Save Configuration**
-4. Device reboots with new settings
+Open **Settings**, select the base UTC offset and daylight-saving rule, set your
+weather location, and adjust the display. Press **Save settings**. Most changes
+apply immediately; changing WiFi credentials, hostname or NTP server restarts the
+clock. Night mode is off by default.
 
-**Timezone examples:**
-
-- UTC+0 (London winter): `0`
-- UTC+1 (Paris winter): `3600`
-- UTC-5 (New York winter): `-18000`
+The [user guide](USAGE.md) describes every section, PINs and settings backup. The
+web UTC selector uses hours/minutes; direct API offsets use seconds.
 
 ---
 
@@ -299,17 +275,18 @@ After initial FTDI flash, all future updates can be done **over WiFi** (no wires
 
 ### Method 1: Web Interface (Easiest)
 
-1. Download latest `.bin` file from releases
+1. Download the clock `.bin` from a [published release](https://github.com/petrochen/esp8266-weather-clock-opensource/releases). When supplied, verify `SHA256SUMS` from the same release.
 2. Browse to: `http://<device-ip>/update`
-3. Login:
-   - Username: `admin`
-   - Password: `admin` (change in source code!)
-4. Click: **Choose File**
-5. Select `.bin` file
-6. Click: **Update**
-7. Wait for upload (~1 minute)
-8. Device reboots automatically
-9. Check version at: `http://<device-ip>/debug`
+3. Choose the firmware `.bin` file.
+4. Press **Show PIN on clock** and read the six digits on the OLED.
+5. Enter the PIN (with or without the dash). No username is needed.
+6. Press **Upload & restart**, keep power connected, and wait for success.
+7. The clock restarts automatically. Check the version on the Clock page.
+
+The web interface is included in the firmware. Leave the advanced Filesystem
+option unused unless you deliberately have a separate filesystem image.
+An older installed firmware may still ask for `admin` and its existing code for
+this first upgrade; the new PIN-only page becomes available after that upgrade.
 
 ### Method 2: Arduino IDE
 
@@ -317,16 +294,17 @@ After initial FTDI flash, all future updates can be done **over WiFi** (no wires
 2. Go to: **Tools → Port**
 3. Select: **tj56654-clock at 192.168.x.x** (network port!)
 4. Click: **Sketch → Upload**
-5. Wait for upload
-6. Device reboots automatically
+5. Enter the six-digit maintenance PIN when asked (no dash for ArduinoOTA)
+6. Wait for upload and automatic restart
 
 **Note**: Network port only appears if device is online and mDNS is working.
 
 ### Method 3: curl (Command Line)
 
 ```bash
-# Build firmware first, then:
-curl -u admin:admin -F "file=@/path/to/firmware.bin" http://192.168.x.x/update
+# Legacy Basic-auth compatibility: curl prompts for the PIN.
+# Use one explicit binary path, not a wildcard.
+curl -u admin -F "firmware=@/path/to/firmware.bin" http://192.168.x.x/update
 ```
 
 Replace:
@@ -368,12 +346,13 @@ Replace:
 **Error: "Sketch too big"**
 
 - Flash size must be set to 1MB
-- Reduce features if necessary (disable weather, etc.)
+- Use the pinned libraries and exact [build target](VALIDATION.md#reproducible-build)
+- Check the `.bin` and IRAM budgets; a web setting does not remove code from the binary
 
 **IRAM overflow error**
 
-- Some functions missing `ICACHE_FLASH_ATTR`
-- Use version from this repo (already optimized)
+- Compare the build target and dependencies with [validation notes](VALIDATION.md)
+- Check whether a source change placed more code in IRAM; the remaining margin is small
 
 ### WiFi Connection Fails
 
@@ -395,7 +374,9 @@ Replace:
 **Display is blank**
 
 - Check: I2C wiring (SDA=GPIO0, SCL=GPIO2)
-- Check: Display I2C address (try 0x3C and 0x3D in code)
+- Check **Settings → Display** for an enabled night schedule. **Show PIN on clock** temporarily wakes it.
+- In the intermediate 1.9.11-dev build, set brightness to 4 to recover from the zero-brightness bug; 1.10.0 keeps level 0 visible.
+- The firmware tries I2C addresses 0x3C and 0x3D at startup
 - Test: Use `/api/i2c-scan` endpoint to detect display
 
 **Display shows garbage**
@@ -411,7 +392,7 @@ Replace:
 
 ### Time Not Syncing
 
-**Time shows 00:00:00**
+**Time shows --:--**
 
 - Check: WiFi is connected (`/api/status`)
 - Check: NTP server is reachable (default: pool.ntp.org)
@@ -421,38 +402,40 @@ Replace:
 **Time is wrong by hours**
 
 - Check: Timezone offset in `/config`
-- Remember: Offset is in **seconds**, not hours
-  - Example: UTC+1 = 3600 seconds
+- The web selector uses UTC hours/minutes; the API uses **seconds**
+- European DST adds one hour; disable it where those rules do not apply
 
 ### Weather Not Updating
 
-**Temperature shows 0.0°C**
+**Weather is missing or marked as a saved reading**
 
 - Check: Internet connectivity (`/api/debug`)
 - Check: Latitude/longitude are correct
 - Check: Open-Meteo API is accessible (visit https://open-meteo.com/ in browser)
-- Try: Manual weather fetch at `/test-weather` (if implemented)
+- Check `valid`, `stale` and `age_seconds` in `/api/weather`; the firmware retries failed requests
+- There is no manual `/test-weather` route
 
 ### OTA Update Fails
 
 **Web upload hangs at 0%**
 
 - Check: Device is online and responsive
-- Try: Smaller firmware (disable features)
+- Select a non-empty firmware `.bin` for this board and enter the PIN shown on the OLED
 - Try: Upload via Arduino IDE instead
 
-**Upload completes but device doesn't reboot**
+**Upload finishes but reports an error**
 
-- Wait 30 seconds (sometimes slow)
-- Manually power cycle device
-- Check serial output for errors
+- An image can reach 100% upload and still fail validation. Read the final result.
+- The core can return `Update error:` with HTTP 200; that is not a successful update.
+- If the connection drops, the result is unknown. Check the clock and its version
+  before retrying; keep power connected while a write may still be in progress.
 
 ### Serial Monitor Shows Errors
 
 **"DNS resolution failed"**
 
-- In v1.9.0 (fixed in v1.9.1)
-- Upgrade to v1.9.1 or later
+- Check the configured NTP hostname, router DNS and Internet access
+- Version 1.10.0 retries startup DNS failures without a manual reboot
 
 **Watchdog reset / exception**
 
@@ -462,60 +445,44 @@ Replace:
 
 ---
 
-## Advanced: Custom Configuration
+## Recovery and Reset
 
-### Change OTA Password
+### Recover WiFi with three quick power cycles
 
-Edit in source code (line ~60):
+If the network has changed or WiFi credentials no longer work, start the clock
+three times, cutting power before each of the first two runs reaches ten seconds:
 
-```cpp
-ArduinoOTA.setPassword("your-secret-password");
-```
+1. Power on, then off within ten seconds.
+2. Power on again, then off within ten seconds.
+3. Power on a third time and leave it running.
 
-### Change Web Admin Password
+The third boot shows `FACTORY RESET!` and clears both saved and SDK WiFi credentials.
+Despite that screen label, **other settings and the maintenance PIN are retained**.
+Connect to **TJ56654-Setup**, password `12345678`, and configure WiFi through the
+portal at `http://192.168.4.1/`.
 
-Edit in source code (line ~430):
+### Recover through the fallback AP
 
-```cpp
-if (!server.authenticate("admin", "your-secret-password")) {
-```
+If station connection repeatedly fails, the firmware can also enable
+**TJ56654-Setup** while retrying. A first-setup portal timeout can fall back to
+**TJ56654-Clock**. Both use `12345678`. On these fallback APs, open
+`http://192.168.4.1/config` and save the corrected network details.
 
-### Disable Features
+The WiFiManager setup portal has a 180-second timeout. The separate fallback AP
+is not covered by that timer. A successful station connection returns to normal
+station operation. See [Architecture](ARCHITECTURE.md).
 
-To save memory, disable unused features:
+### Reset everything
 
-**Disable weather:**
+Use **Settings → Restart & reset → Reset all settings**, show/read the PIN, and
+confirm. This clears the configuration and PIN record as well as SDK WiFi credentials.
+The next boot starts setup with defaults and generates a new PIN.
 
-- Set `weather_enabled = false` in `/config`
-- Or remove weather code from source
+For a device that cannot boot or show its PIN, use the [FTDI first-flash procedure](#first-flash-via-ftdi).
+Erasing the entire flash is a last resort and also removes all settings and credentials.
+Do not use the WiFi-only power-cycle recovery as a way to reset a night schedule or PIN.
 
-**Disable sunrise/sunset:**
-
-- Set `show_sunrise_sunset = false` in `/config`
-
-**Disable display rotation:**
-
-- Set `display_rotation_sec = 0` (manual switch only)
-
----
-
-## Factory Reset (no tools needed)
-
-Since v1.9.6, three quick power cycles within 10 seconds trigger a factory reset:
-
-1. Power off the device
-2. Power on (briefly, < 10 sec)
-3. Power off, power on
-4. Power off, power on
-
-On the third boot the OLED shows `FACTORY RESET! WiFi: TJ56654-Setup Pass: 12345678`.
-Connect your phone to that AP and reconfigure WiFi at `http://192.168.4.1/config`.
-
-Use this if:
-
-- Forgot configured WiFi credentials
-- Device stuck in "No WiFi" loop after router change
-- Tests/fuzzing corrupted config
+For PIN formats, night mode and optional display screens, see the [user guide](USAGE.md).
 
 ## Verifying Installation
 
@@ -525,18 +492,20 @@ Run the test suite against your device:
 python3 tests/test_device.py 192.168.x.x
 ```
 
-A healthy device passes all 73 tests, with heap drift under 1 KB across the run.
+The default suite is read-only and includes a 30-request heap smoke test.
+Use `--fuzz` to temporarily test non-network settings with backup and restoration.
+Passing this suite does not establish multi-day stability. See [validation](VALIDATION.md).
 
 ## Getting Help
 
 If you're still stuck:
 
-1. **Check existing issues**: https://github.com/your-repo/issues
+1. **Check existing issues**: https://github.com/petrochen/esp8266-weather-clock-opensource/issues
 2. **Open new issue** with:
    - Arduino IDE version
    - ESP8266 board package version
    - Library versions
-   - Full serial monitor output
+   - Relevant serial output, with network names/addresses or credentials redacted as needed
    - Steps to reproduce
 3. **Join discussion** for general questions
 

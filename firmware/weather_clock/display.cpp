@@ -1,37 +1,56 @@
 /*
  * display.cpp - Display functions for OLED
- * TJ-56-654 Weather Clock v1.9.3
+ * TJ-56-654 Weather Clock
  */
 
 #include "globals.h"
+#include "weather_icons.h"
+
+static bool displayDirty = true;
+static bool displaySleeping = false;
+
+void ICACHE_FLASH_ATTR wakeDisplay() {
+  if (!displaySleeping) return;
+  display.ssd1306_command(SSD1306_DISPLAYON);
+  displaySleeping = false;
+  displayDirty = true;
+  lastModeSwitch = millis();
+}
+
+void ICACHE_FLASH_ATTR invalidateDisplay() { displayDirty = true; }
+
+void ICACHE_FLASH_ATTR applyDisplaySettings() {
+  // Legacy EEPROM may contain zero (previous firmware ignored brightness) or
+  // values that bypassed form validation. Zero is a dim level, not screen-off.
+  const int level = config.brightness < 0 ? 0 : (config.brightness > 7 ? 7 : config.brightness);
+  const uint8_t contrast = 32 + level * (255 - 32) / 7;
+  if (config.display_orientation > 3) config.display_orientation = 2;
+  display.setRotation(config.display_orientation);
+  display.ssd1306_command(SSD1306_SETCONTRAST);
+  display.ssd1306_command(contrast);
+  invalidateDisplay();
+}
 
 // Update main time display
 void ICACHE_FLASH_ATTR updateDisplay() {
-  static unsigned long lastUpdate = 0;
-
-  // Update display only every 500ms (not every loop cycle)
-  // BUT skip throttle during transition for smooth animation
-  if (!inTransition && millis() - lastUpdate < 500) return;
-  lastUpdate = millis();
-
   display.clearDisplay();
 
-  // Check if we have ANY time source (NTPClient or async sync)
-  bool hasTime = timeClient.isTimeSet() || timeIsSynced;
+  // Do not display an epoch until the shared clock has synchronized.
+  bool hasTime = timeIsSynced;
 
   if (!hasTime) {
     display.setTextSize(3);
     display.setTextColor(SSD1306_WHITE);
     display.setCursor(20, 24);
-    display.println("--:--");
+    display.println(F("--:--"));
 
     // Show WiFi status in yellow zone
     display.setTextSize(1);
     display.setCursor(25, 52);
     if (wifiConnState == WIFI_CONN_CONNECTED) {
-      display.print("Syncing NTP...");
+      display.print(F("Syncing NTP..."));
     } else {
-      display.print("No WiFi");
+      display.print(F("No WiFi"));
     }
     if (!inTransition) {
       display.display();
@@ -40,7 +59,7 @@ void ICACHE_FLASH_ATTR updateDisplay() {
   }
 
   // Get epoch from best available source
-  unsigned long epochTime = timeIsSynced ? getAsyncEpoch() : timeClient.getEpochTime();
+  unsigned long epochTime = getAsyncEpoch();
   unsigned long localTime = epochTime + getTotalOffset(epochTime);
 
   int hours = (localTime / 3600) % 24;
@@ -63,9 +82,9 @@ void ICACHE_FLASH_ATTR updateDisplay() {
 
   if (wifiConnState != WIFI_CONN_CONNECTED) {
     // Show "!" indicator when WiFi is down
-    sprintf(dateStr, "!%s %02d.%02d", days[ptm->tm_wday], ptm->tm_mday, ptm->tm_mon + 1);
+    snprintf(dateStr, sizeof(dateStr), "!%s %02d.%02d", days[ptm->tm_wday], ptm->tm_mday, ptm->tm_mon + 1);
   } else {
-    sprintf(dateStr, "%s %02d.%02d", days[ptm->tm_wday], ptm->tm_mday, ptm->tm_mon + 1);
+    snprintf(dateStr, sizeof(dateStr), "%s %02d.%02d", days[ptm->tm_wday], ptm->tm_mday, ptm->tm_mon + 1);
   }
 
   // Center in yellow zone (Y: 48-63)
@@ -84,9 +103,9 @@ void ICACHE_FLASH_ATTR updateDisplay() {
 
   // Blinking colon
   if (colonBlink) {
-    display.print(":");
+    display.print(F(":"));
   } else {
-    display.print(" ");
+    display.print(F(" "));
   }
 
   display.printf("%02d", minutes);
@@ -105,11 +124,18 @@ void ICACHE_FLASH_ATTR displayWeather() {
     display.setTextSize(3);
     display.setTextColor(SSD1306_WHITE);
     display.setCursor(20, 24);
-    display.println("No Data");
+    display.println(F("No Data"));
     if (!inTransition) {
       display.display();
     }
     return;
+  }
+
+  if (weather.stale) {
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 0);
+    display.print(F("*"));
   }
 
   // === YELLOW ZONE (Y: 48-63): City name (size 2 = 16px) ===
@@ -119,29 +145,20 @@ void ICACHE_FLASH_ATTR displayWeather() {
   display.setCursor(cityX, 48);
   display.print(config.city_name);
 
-  // === BLUE ZONE (Y: 0-47): Temperature (size 3 = 24px height) ===
-  display.setTextSize(3);
-  display.setTextColor(SSD1306_WHITE);
-
-  // Format temperature value only
+  // Keep the 16px icon, stale marker and even -99.9 C inside the 128px row.
+  display.drawBitmap(0, 19, weatherIcon(weather.weathercode), ICON_WIDTH, ICON_HEIGHT, SSD1306_WHITE);
   char tempStr[16];
-  sprintf(tempStr, "%.1f", weather.temperature);
-
-  // Center temperature + degree symbol
-  int tempValueWidth = strlen(tempStr) * 18;  // Size 3 = ~18px per char
-  int degreeSymbolWidth = 6;  // Size 1 = 6px per char
-  int totalWidth = tempValueWidth + degreeSymbolWidth + 6;
-  int startX = (128 - totalWidth) / 2;
-
-  // Print temperature value
-  display.setCursor(startX, 12);
+  snprintf(tempStr, sizeof(tempStr), "%.1f", weather.temperature);
+  int textSize = strlen(tempStr) > 4 ? 2 : 3;
+  int valueWidth = strlen(tempStr) * 6 * textSize;
+  int startX = 22 + (106 - valueWidth - 12) / 2;
+  display.setTextSize(textSize);
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(startX, 16);
   display.print(tempStr);
-
-  // Print degree symbol and C (small, raised)
   display.setTextSize(1);
-  int degreeX = startX + tempValueWidth;
-  display.setCursor(degreeX, 12);
-  display.print("\xF8" "c");  // °c
+  display.setCursor(startX + valueWidth, 16);
+  display.print("\xF8" "c");
 
   if (!inTransition) {
     display.display();
@@ -156,7 +173,7 @@ void ICACHE_FLASH_ATTR displaySunTimes() {
     display.setTextSize(3);
     display.setTextColor(SSD1306_WHITE);
     display.setCursor(30, 24);
-    display.println("----");
+    display.println(F("----"));
     if (!inTransition) {
       display.display();
     }
@@ -169,7 +186,7 @@ void ICACHE_FLASH_ATTR displaySunTimes() {
   int daylightMins = daylightMinutes % 60;
 
   char daylightStr[32];
-  sprintf(daylightStr, "Day %dh %dm", daylightHours, daylightMins);
+  snprintf(daylightStr, sizeof(daylightStr), "Day %dh %dm", daylightHours, daylightMins);
 
   display.setTextSize(1);
   int textWidth = strlen(daylightStr) * 6;
@@ -183,12 +200,12 @@ void ICACHE_FLASH_ATTR displaySunTimes() {
 
   // Line 1: Sunrise
   display.setCursor(5, 4);
-  display.print("\x18 ");  // Up arrow
+  display.print(F("\x18 "));  // Up arrow
   display.print(sunTimes.sunrise);
 
   // Line 2: Sunset
   display.setCursor(5, 28);
-  display.print("\x19 ");  // Down arrow
+  display.print(F("\x19 "));  // Down arrow
   display.print(sunTimes.sunset);
 
   if (!inTransition) {
@@ -213,13 +230,15 @@ void ICACHE_FLASH_ATTR applyDissolveEffect(uint8_t hidePercent, bool withDrift) 
     }
   }
 
-  // Multiply by 4 to compensate for random overlaps
-  uint32_t pixelsToHide = ((uint32_t)SCREEN_WIDTH * SCREEN_HEIGHT * hidePercent * 4) / 100;
-
-  for (uint32_t i = 0; i < pixelsToHide; i++) {
-    uint8_t x = random(SCREEN_WIDTH);
-    uint8_t y = random(SCREEN_HEIGHT);
-    display.drawPixel(x, y, SSD1306_BLACK);
+  // Direct byte masks: no random calls, duplicate work, or drawPixel overhead.
+  const uint16_t threshold = uint32_t(hidePercent) * 8192U / 100U;
+  uint8_t* buffer = display.getBuffer();
+  for (uint16_t i = 0; i < 1024; ++i) {
+    uint8_t mask = 0;
+    for (uint8_t bit = 0; bit < 8; ++bit) {
+      if (dissolveRank(i * 8 + bit) >= threshold) mask |= 1U << bit;
+    }
+    buffer[i] &= mask;
   }
 
   display.display();
@@ -227,7 +246,20 @@ void ICACHE_FLASH_ATTR applyDissolveEffect(uint8_t hidePercent, bool withDrift) 
 
 // Display rotation with dissolve transition
 void ICACHE_FLASH_ATTR updateDisplayRotation() {
+  if (maintenanceCodeVisible()) return;
   unsigned long now = millis();
+  if (ipDisplayUntil != 0) {
+    if (uint32_t(now - ipDisplayUntil) >= 0x80000000UL) return;
+    ipDisplayUntil = 0;
+    invalidateDisplay();
+  }
+  if (isNightModeActive()) {
+    if (!displaySleeping) display.ssd1306_command(SSD1306_DISPLAYOFF);
+    displaySleeping = true;
+    inTransition = false;
+    return;
+  }
+  wakeDisplay();
   unsigned long interval = config.display_rotation_sec * 1000UL;
 
   // Handle active dissolve transition (two phases)
@@ -237,6 +269,8 @@ void ICACHE_FLASH_ATTR updateDisplayRotation() {
     if (elapsed >= DISSOLVE_DURATION) {
       displayMode = nextDisplayMode;
       inTransition = false;
+      lastModeSwitch = now;
+      invalidateDisplay();
       return;
     }
 
@@ -287,6 +321,10 @@ void ICACHE_FLASH_ATTR updateDisplayRotation() {
       }
     } while (!isModeEnabled(nextDisplayMode));
 
+    if (nextDisplayMode == displayMode) {
+      lastModeSwitch = now;
+      return;
+    }
     inTransition = true;
     transitionStart = now;
     lastModeSwitch = now;
@@ -294,7 +332,15 @@ void ICACHE_FLASH_ATTR updateDisplayRotation() {
     return;
   }
 
-  // Normal display update
+  // Static screens only change on new data/settings. The clock blinks at 2 Hz.
+  static unsigned long lastClockFrame = 0;
+  if (!isModeEnabled(displayMode)) {
+    displayMode = 0;
+    displayDirty = true;
+  }
+  if (!displayDirty && (displayMode != 0 || uint32_t(now - lastClockFrame) < 500)) return;
+  displayDirty = false;
+  lastClockFrame = now;
   switch(displayMode) {
     case 0: updateDisplay(); break;
     case 1: displayWeather(); break;
@@ -320,6 +366,7 @@ void ICACHE_FLASH_ATTR clearDisplay() {
 
 // Show number on OLED
 void ICACHE_FLASH_ATTR showNumber(int num, bool leadingZeros) {
+  wakeDisplay();
   display.clearDisplay();
   display.setTextSize(3);
   display.setTextColor(SSD1306_WHITE);
@@ -336,12 +383,13 @@ void ICACHE_FLASH_ATTR showNumber(int num, bool leadingZeros) {
 
 // Show "No WiFi" status
 void ICACHE_FLASH_ATTR showNoWiFi(unsigned long nextRetrySeconds) {
+  if (maintenanceCodeVisible() || isNightModeActive()) return;
   display.clearDisplay();
 
   display.setTextSize(2);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(20, 8);
-  display.println("No WiFi");
+  display.println(F("No WiFi"));
 
   display.setTextSize(1);
   display.setCursor(10, 52);
@@ -366,23 +414,22 @@ void ICACHE_FLASH_ATTR showStartupAnimation() {
   // 5 chars × 10px + 4 gaps × 2px = 58px → X = (128-58)/2 = 35
   display.setTextSize(2);
   display.setCursor(35, 10);
-  display.print("TJ-56");
+  display.print(F("TJ-56"));
 
   // "Weather Clock" centered in BLUE zone
   // 13 chars × 5px + 12 gaps × 1px = 77px → X = (128-77)/2 = 26
   display.setTextSize(1);
   display.setCursor(26, 30);
-  display.print("Weather Clock");
+  display.print(F("Weather Clock"));
 
   // Version in YELLOW zone (centered)
   // 6 chars × 5px + 5 gaps × 1px = 35px → X = (128-35)/2 = 47
   display.setTextSize(1);
   display.setCursor(47, 52);
-  display.print("v");
+  display.print(F("v"));
   display.print(FIRMWARE_VERSION);
 
   display.display();
-  delay(1500);
 
   Serial.println("  Boot: Logo done");
 }
@@ -397,7 +444,7 @@ void ICACHE_FLASH_ATTR showWiFiConnecting(int step) {
   // 7 chars × 10px + 6 gaps × 2px = 82px → X = 23
   display.setTextSize(2);
   display.setCursor(23, 10);
-  display.print("WiFi...");
+  display.print(F("WiFi..."));
 
   // Animated dots in BLUE zone (centered)
   // "* * * * * * " = 12 chars × 5px + 11 gaps × 1px = 71px → X = 29
@@ -407,9 +454,9 @@ void ICACHE_FLASH_ATTR showWiFiConnecting(int step) {
   int dots = (step % 6) + 1;
   for (int i = 0; i < 6; i++) {
     if (i < dots) {
-      display.print("* ");
+      display.print(F("* "));
     } else {
-      display.print("  ");
+      display.print(F("  "));
     }
   }
 
@@ -417,7 +464,7 @@ void ICACHE_FLASH_ATTR showWiFiConnecting(int step) {
   // 10 chars × 5px + 9 gaps × 1px = 59px → X = 35
   display.setTextSize(1);
   display.setCursor(35, 52);
-  display.print("Connecting");
+  display.print(F("Connecting"));
 
   display.display();
 }
@@ -425,6 +472,7 @@ void ICACHE_FLASH_ATTR showWiFiConnecting(int step) {
 // Show connected status with SSID and IP
 // Layout: Blue zone (Y 0-47), Yellow zone (Y 48-63)
 void ICACHE_FLASH_ATTR showConnected() {
+  if (maintenanceCodeVisible() || isNightModeActive()) return;
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
 
@@ -441,7 +489,7 @@ void ICACHE_FLASH_ATTR showConnected() {
   // IP address in BLUE zone
   IPAddress ip = WiFi.localIP();
   char ipStr[16];
-  sprintf(ipStr, "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+  snprintf(ipStr, sizeof(ipStr), "%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
   int ipLen = strlen(ipStr);
 
   // Try size 2 first: n chars × 10px + (n-1) gaps × 2px
@@ -464,10 +512,10 @@ void ICACHE_FLASH_ATTR showConnected() {
   // 2 chars × 5px + 1 gap × 1px = 11px → X = 59
   display.setTextSize(1);
   display.setCursor(59, 52);
-  display.print("OK");
+  display.print(F("OK"));
 
   display.display();
-  delay(2000);
+  ipDisplayUntil = millis() + 2000UL;
 }
 
 // Show IP address (legacy, for reconnection)

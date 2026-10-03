@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Weather Clock</title>
+  <style>/* INLINE_CSS */</style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="header shell">
+    <a class="brand" href="/" aria-label="Weather Clock home"><span class="brand-mark" aria-hidden="true">◷</span><span>Weather Clock<small><span id="device-name">TJ-56-654</span><span id="firmware-version">ESP8266</span></small></span></a>
+    <nav aria-label="Main navigation"><a href="/" data-page="clock">Clock</a><a href="/config" data-page="settings">Settings</a><a href="/update" data-page="update">Update</a></nav>
+    <p id="connection" class="connection" role="status">Connecting…</p>
+  </header>
+  <main id="main" class="shell">
+    <section id="clock-page" hidden aria-labelledby="clock-title">
+      <div class="page-heading"><h1 id="clock-title">Device status</h1><div class="actions"><a href="/config">Settings</a><button id="refresh" class="secondary">Refresh</button></div></div>
+      <div class="dashboard">
+        <div class="clock-face" aria-label="Clock display">
+          <div class="clock-top"><span>Local time</span><span id="sync-status">Waiting for time</span></div>
+          <div class="clock-digits"><span id="clock-time">--:--</span><span class="clock-seconds" id="clock-seconds">--</span></div>
+          <div class="clock-bottom"><span id="clock-date">Waiting for synchronization</span><span id="clock-period"></span></div>
+        </div>
+        <div class="weather-panel">
+          <div class="weather-location"><h2 id="weather-city">Your location</h2><span id="weather-symbol" aria-hidden="true">☁</span></div>
+          <div class="weather-reading"><div class="temperature"><span id="weather-temp">—</span><span>°C</span></div><div><p id="weather-description">Waiting for weather</p><p id="weather-freshness" class="muted"></p></div></div>
+          <dl class="almanac"><div><dt>Wind</dt><dd id="weather-wind">—</dd></div><div><dt>Sunrise</dt><dd id="sunrise">—</dd></div><div><dt>Sunset</dt><dd id="sunset">—</dd></div></dl>
+        </div>
+      </div>
+      <p class="clock-note"><span id="display-note">Display active</span><a href="/config#display-settings">Display settings</a></p>
+      <dl class="device-details vitals"><div><dt>IP address</dt><dd id="device-ip">—</dd></div><div><dt>Wi-Fi RSSI</dt><dd id="device-rssi">—</dd></div><div><dt>Uptime</dt><dd id="device-uptime">—</dd></div><div><dt>Free heap</dt><dd id="device-memory">—</dd></div></dl>
+      <details class="diagnostics" id="diagnostics"><summary>Device details &amp; diagnostics</summary><dl class="device-details"><div><dt>NTP synchronization</dt><dd id="ntp-details">—</dd></div><div><dt>Gateway / DNS</dt><dd id="network-details">—</dd></div><div class="wide"><dt>Last error</dt><dd id="last-error">—</dd></div></dl><div class="actions"><button id="test-display" class="secondary">Test display</button><button id="test-ntp" class="secondary">Sync time</button><button id="scan-i2c" class="secondary">Scan I²C</button></div><p id="diagnostic-result" role="status"></p></details>
+    </section>
+
+    <section id="settings-page" hidden aria-labelledby="settings-title">
+      <div class="page-heading"><h1 id="settings-title">Settings</h1><a href="/api/config" download="clock-config.json">Export JSON</a></div>
+      <form id="settings-form">
+        <fieldset disabled id="settings-fields">
+          <legend class="sr-only">Clock configuration</legend>
+          <section class="settings-section" id="display-settings" aria-labelledby="display-title">
+            <h2 id="display-title">Display</h2>
+            <div class="form-row"><label for="brightness">Brightness</label><div class="range-control"><input id="brightness" type="range" name="brightness" min="0" max="7" step="1" value="4"><output id="brightness-value" for="brightness">4 / 7</output></div></div>
+            <div class="form-row"><label for="orientation">Orientation</label><select id="orientation" name="display_orientation"><option value="0">0°</option><option value="1">90°</option><option value="2">180° (default)</option><option value="3">270°</option></select></div>
+            <div class="form-row"><label for="screen-interval">Screen interval</label><div class="input-unit"><input id="screen-interval" type="number" name="display_rotation_sec" min="1" max="60" required><span>sec</span></div></div>
+            <div class="form-row"><span id="screens-label">Screens</span><div class="checks" role="group" aria-labelledby="screens-label"><label class="check"><input type="checkbox" name="show_weather">Weather</label><label class="check"><input type="checkbox" name="show_sunrise_sunset">Sunrise / sunset</label></div></div>
+            <div class="form-row"><span id="night-label">Night mode</span><label class="check"><input type="checkbox" name="night_enabled" aria-labelledby="night-label night-enable-text"><span id="night-enable-text">Turn display off</span></label></div>
+            <div class="form-row"><span id="schedule-label">Off / on</span><div class="time-window" role="group" aria-labelledby="schedule-label"><input type="time" name="night_start" aria-label="Night mode starts" value="23:00" required><span aria-hidden="true">–</span><input type="time" name="night_end" aria-label="Night mode ends" value="07:00" required></div></div>
+            <p class="help">Local time. Equal times disable the schedule. Brightness 0 stays visible.</p>
+          </section>
+          <section class="settings-section" aria-labelledby="time-title">
+            <h2 id="time-title">Time &amp; NTP</h2>
+            <div class="form-row"><label for="timezone">Base UTC offset</label><select name="timezone_offset" id="timezone"></select></div>
+            <div class="form-row"><label for="clock-format">Format</label><select id="clock-format" name="hour_format_24"><option value="true">24-hour</option><option value="false">12-hour</option></select></div>
+            <div class="form-row"><span id="dst-label">Daylight saving</span><label class="check"><input type="checkbox" name="dst_enabled" aria-labelledby="dst-label dst-rule"><span id="dst-rule">Automatic (EU rules)</span></label></div>
+            <div class="form-row"><label for="ntp-server">NTP server</label><input id="ntp-server" name="ntp_server" maxlength="63" required spellcheck="false"></div>
+            <div class="form-row"><label for="ntp-interval">Sync interval</label><div class="input-unit"><input id="ntp-interval" type="number" name="ntp_interval" min="60" max="86400" required><span>sec</span></div></div>
+            <p class="help">Changing the NTP server restarts the clock.</p>
+          </section>
+          <section class="settings-section" aria-labelledby="weather-title">
+            <h2 id="weather-title">Weather</h2>
+            <div class="form-row"><span id="weather-enable-label">Fetch weather</span><label class="check"><input type="checkbox" name="weather_enabled" aria-labelledby="weather-enable-label weather-provider"><span id="weather-provider">Open-Meteo</span></label></div>
+            <div class="form-row"><label for="city">City label</label><input id="city" name="city_name" maxlength="31" autocomplete="address-level2"></div>
+            <div class="form-row"><label for="latitude">Latitude</label><input id="latitude" type="number" name="latitude" min="-90" max="90" step="any" required></div>
+            <div class="form-row"><label for="longitude">Longitude</label><input id="longitude" type="number" name="longitude" min="-180" max="180" step="any" required></div>
+            <div class="form-row"><label for="weather-interval">Refresh interval</label><div class="input-unit"><input id="weather-interval" type="number" name="weather_interval" min="60" max="86400" required><span>sec</span></div></div>
+          </section>
+          <section class="settings-section" aria-labelledby="network-title">
+            <h2 id="network-title">Connection</h2>
+            <div class="form-row"><label for="ssid">Wi-Fi SSID</label><input id="ssid" name="ssid" maxlength="31" autocomplete="off"></div>
+            <div class="form-row"><label for="hostname">Hostname</label><input id="hostname" name="hostname" maxlength="31" required spellcheck="false"></div>
+            <div class="form-row"><label for="wifi-password">New password</label><input id="wifi-password" type="password" name="password" maxlength="63" autocomplete="new-password" placeholder="Blank = keep saved password"></div>
+            <div class="form-row"><span id="open-network-label">Open network</span><label class="check"><input type="checkbox" name="clear_password" aria-labelledby="open-network-label clear-password-label"><span id="clear-password-label">Clear saved password</span></label></div>
+            <p class="help">Network changes restart the clock. Saved passwords are never returned.</p>
+          </section>
+        </fieldset>
+        <div class="save-bar"><p id="settings-result" role="status">Loading settings…</p><div class="actions"><button type="button" id="discard-settings" class="secondary" disabled>Discard</button><button type="submit" id="save-settings" disabled>Save settings</button></div></div>
+      </form>
+      <details class="maintenance"><summary>Restart &amp; reset <span class="muted">PIN required</span></summary><div class="actions"><button type="button" class="secondary" data-maintenance="reboot">Restart clock</button><button type="button" class="danger" data-maintenance="eeprom-clear">Reset all settings</button></div><p id="maintenance-result" role="status"></p></details>
+    </section>
+
+    <section id="update-page" hidden aria-labelledby="update-title">
+      <div class="page-heading"><h1 id="update-title">Firmware update</h1></div>
+      <div class="update-layout"><form id="update-form" class="update-form">
+        <div class="form-row upload-row"><label for="firmware-file">Firmware file</label><div><input type="file" id="firmware-file" accept=".bin,.bin.gz" required><p id="file-info" class="help">Select a .bin or .bin.gz image.</p></div></div>
+        <div class="form-row"><label for="update-pin">Maintenance PIN</label><div class="pin-controls"><input class="pin-input" id="update-pin" type="password" inputmode="numeric" pattern="[0-9]{3}-?[0-9]{3}" maxlength="7" placeholder="•••-•••" autocomplete="off" required><button type="button" class="secondary" data-show-pin>Show PIN on clock</button><p class="pin-result help" role="status"></p></div></div>
+        <details class="advanced"><summary>Advanced: filesystem image</summary><p class="help">The web UI is included in the firmware. Use Filesystem only for a separate filesystem image.</p><div class="form-row"><label for="image-type">Image type</label><select id="image-type"><option value="firmware">Firmware</option><option value="filesystem">Filesystem</option></select></div></details>
+        <div class="upload-actions"><button type="submit" id="upload-button" disabled>Upload &amp; restart</button><progress id="upload-progress" max="100" value="0" hidden aria-label="Firmware upload progress"></progress><p id="upload-result" role="status">Select a non-empty file to continue.</p></div>
+      </form><aside class="update-aside"><h2>Firmware target</h2><dl><div><dt>Module</dt><dd>ESP-01S / ESP8266</dd></div><div><dt>Flash</dt><dd>1MB / 64KB FS</dd></div><div><dt>Mode / CPU</dt><dd>DIO / 80MHz</dd></div></dl><p>Settings are retained. A successful update restarts the clock.</p><p>Keep power connected until the update finishes.</p></aside></div>
+    </section>
+  </main>
+  <footer class="shell footer"><span>TJ-56-654</span><a href="/api/status">Status JSON</a><a href="/debug">Diagnostics</a></footer>
+  <dialog id="pin-dialog"><form id="maintenance-form"><h2 id="maintenance-title">Restart clock</h2><p id="maintenance-description"></p><button type="button" class="secondary" data-show-pin>Show PIN on clock</button><p class="pin-result" role="status"></p><label for="maintenance-pin">Six-digit PIN</label><input id="maintenance-pin" class="pin-input" type="password" inputmode="numeric" pattern="[0-9]{3}-?[0-9]{3}" maxlength="7" autocomplete="off" required><p id="dialog-result" role="status"></p><div class="dialog-actions"><button type="button" class="secondary" id="cancel-maintenance">Cancel</button><button type="submit" id="confirm-maintenance">Confirm restart</button></div></form></dialog>
+  <noscript><p class="shell">Enable JavaScript to configure the clock. The clock itself continues to work.</p></noscript>
+  <script>/* INLINE_JS */</script>
+</body>
+</html>

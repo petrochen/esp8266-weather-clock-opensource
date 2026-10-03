@@ -6,7 +6,7 @@
 - **Name**: ESP8266 Mini Weather Clock Kit
 - **Model**: TJ-56-654
 - **Source**: [AliExpress Link](https://pt.aliexpress.com/item/1005008333782531.html)
-- **Price**: ~$12 USD
+- **Purchase price in the project story**: about €5 (not a current price quote)
 - **Dimensions**: 40mm x 40mm x 43mm
 
 ### Components
@@ -14,7 +14,7 @@
 #### ESP-01S WiFi Module
 - **Chip**: ESP8266EX
 - **Flash**: 1MB (8Mbit)
-- **RAM**: 80KB total (32KB instruction, 48KB data)
+- **Memory**: separate data RAM and instruction/cache regions; see [Memory map](#memory-map)
 - **CPU**: 80MHz (can be overclocked to 160MHz)
 - **WiFi**: 802.11 b/g/n (2.4GHz only)
 - **GPIO**: 2 usable pins (GPIO0, GPIO2)
@@ -25,15 +25,15 @@
 - **Type**: OLED (Organic LED)
 - **Resolution**: 128x64 pixels
 - **Size**: 0.96 inches diagonal
-- **Controller**: SSD1306 or SH1106 compatible
+- **Driver used by this firmware**: Adafruit SSD1306; SH1106 operation is not verified
 - **Interface**: I2C
 - **I2C Address**: 0x3C (default), 0x3D (fallback)
-- **Colors**: Monochrome (white on black)
+- **Framebuffer**: one bit per pixel; display color zones depend on the fitted panel
 
 #### Power Supply
 - **Input**: 5V via Micro-USB
 - **Regulator**: Onboard 3.3V LDO (on main PCB)
-- **Current**: ~80-120mA typical
+- **Current**: depends on WiFi activity and OLED content; full-board consumption has not been measured for this release
 
 #### Case
 - **Material**: Transparent acrylic
@@ -42,22 +42,12 @@
 
 ## Pinout
 
-### ESP-01S Pin Configuration
+### Identifying pins
 
-```
-┌─────────────────┐
-│  ESP-01S Module │
-├─────────────────┤
-│                 │
-│  [antenna]      │
-│                 │
-│  3V3 │ │ GND    │
-│   TX │ │ GPIO0  │  ← I2C SDA (custom mapping!)
-│   RX │ │ GPIO2  │  ← I2C SCL (custom mapping!)
-│   EN │ │ GND    │
-│                 │
-└─────────────────┘
-```
+Use the printed labels on the module or programming adapter. Do not infer header
+orientation from a generic ASCII diagram: the earlier diagram in this document
+incorrectly repeated GND and omitted reset. The wiring tables below name signals,
+not physical pin positions.
 
 ### Pin Functions
 
@@ -69,7 +59,8 @@
 | RX | UART RX | Serial input (flashing) |
 | GPIO0 | General I/O | **I2C SDA** (data line) |
 | GPIO2 | General I/O | **I2C SCL** (clock line) |
-| EN | Chip Enable | Pulled high (always on) |
+| EN | Chip Enable | Must be held high for normal operation |
+| RST | Reset, active low | Module reset; not used for I²C |
 
 **⚠️ Important**: This project uses **non-standard I2C pin mapping**!
 - Typical ESP8266: SDA=GPIO4, SCL=GPIO5
@@ -116,37 +107,42 @@ The main PCB (TJ-56-654) contains:
 
 ## Memory Map
 
-### Flash Memory (1MB)
-```
-0x00000000 - 0x00010000  : Bootloader (64KB)
-0x00010000 - 0x0007C000  : Firmware (~470KB max for OTA)
-0x0007C000 - 0x00080000  : EEPROM emulation (16KB)
-0x00080000 - 0x000FA000  : OTA partition (~470KB)
-0x000FA000 - 0x000FB000  : WiFi config (4KB)
-0x000FB000 - 0x00100000  : System reserved (20KB)
-```
+### Flash memory: the verified 1M64 layout
 
-### RAM Layout
-```
-Total: 80KB
-├── IRAM (Instruction): 32KB
-│   ├── Used: ~62KB (94%)  ← Critical!
-│   └── Free: ~4KB
-└── DRAM (Data): 48KB
-    ├── Heap: ~40KB free
-    ├── Stack: ~4KB
-    └── Globals: ~4KB
-```
+This build uses ESP8266 Arduino core 3.1.2's
+[`eagle.flash.1m64.ld`](https://github.com/esp8266/Arduino/blob/3.1.2/tools/sdk/ld/eagle.flash.1m64.ld).
+Physical flash offsets below are derived from its memory-mapped addresses by
+subtracting `0x40200000`:
+
+| Start | End (exclusive) | Use |
+| --- | --- | --- |
+| `0x00000` | `0xEB000` | Sketch and available OTA staging space, subject to core alignment/reservations |
+| `0xEB000` | `0xFB000` | 64KB filesystem area |
+| `0xFB000` | `0xFC000` | EEPROM emulation sector |
+| `0xFC000` | `0xFD000` | RF calibration |
+| `0xFD000` | `0x100000` | SDK WiFi/system parameters |
+
+There is no fixed pair of 470KB A/B application partitions. OTA needs free sketch
+space for a sector-aligned incoming image; the project enforces a conservative
+**479232-byte binary budget**. Web assets are in the firmware, not the filesystem.
+The firmware uses 512 bytes of EEPROM emulation; record offsets inside that buffer
+are documented in [Architecture](ARCHITECTURE.md#eeprom-compatibility).
+
+### RAM and instruction cache
+
+Data RAM and instruction/cache memory are separate budgets. Under the default
+32KB cache configuration, the build report counts IRAM code plus the 32768-byte
+cache against a 65536-byte region. Static data, heap and stack use the data region;
+free heap is measured at runtime, not inferred from the flash size or IRAM report.
+See [Espressif's memory explanation](https://www.espressif.com/en/products/socs/esp8266ex/resources)
+and the [actual build measurements](VALIDATION.md#local-validation-on-2026-10-03).
 
 ## Power Consumption
 
-| Mode | Current | Power @3.3V |
-|------|---------|-------------|
-| Active (WiFi on) | 80-120mA | 264-396mW |
-| Display on | +15mA | +50mW |
-| Deep sleep | ~20µA | ~66µW |
-
-**Note**: This firmware does not use deep sleep (clock is always-on).
+This release has no whole-board power measurements. WiFi transmission, OLED content,
+contrast and the board regulator all affect consumption. Night mode switches the
+OLED off; it does not put the ESP8266 into deep sleep, and network work continues.
+Do not interpret chip-only sleep figures as consumption of the assembled clock.
 
 ## Hardware Modifications
 
@@ -191,7 +187,7 @@ For additional peripherals, consider upgrading to ESP-12F or ESP32.
 
 ## Datasheets
 
-- [ESP8266EX Datasheet](https://www.espressif.com/sites/default/files/documentation/0a-esp8266ex_datasheet_en.pdf)
+- [ESP8266EX Datasheet](https://documentation.espressif.com/0a-esp8266ex_datasheet_en.html)
 - [ESP-01S Pinout](https://components101.com/wireless/esp8266-pinout-configuration-features-datasheet)
 - [SSD1306 OLED Controller](https://cdn-shop.adafruit.com/datasheets/SSD1306.pdf)
 

@@ -1,6 +1,6 @@
 /*
  * globals.h - Global variables and extern declarations
- * TJ-56-654 Weather Clock v1.9.3
+ * TJ-56-654 Weather Clock
  */
 
 #ifndef GLOBALS_H
@@ -11,19 +11,18 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266HTTPUpdateServer.h>
 #include <WiFiUdp.h>
-#include <NTPClient.h>
 #include <Adafruit_SSD1306.h>
 #include "config.h"
 
 // Configuration
 extern Config config;
+extern NightSettings nightSettings;
 
 // OLED Display
 extern Adafruit_SSD1306 display;
 
 // NTP Client
 extern WiFiUDP ntpUDP;
-extern NTPClient timeClient;
 
 // Web server
 extern ESP8266WebServer server;
@@ -90,8 +89,7 @@ long getTotalOffset(unsigned long epochTime);
 unsigned long getAsyncEpoch();
 void sendNTPRequestAsync();
 void processNTPResponse();
-void ICACHE_FLASH_ATTR updateNTPTime();
-void ICACHE_FLASH_ATTR testInternetConnectivity();
+void formatClockTime(char* out, size_t size, bool local);
 
 // WiFi functions (wifi_manager.cpp)
 void ICACHE_FLASH_ATTR setupWiFi();
@@ -106,6 +104,10 @@ void ICACHE_FLASH_ATTR showWiFiConnecting(int step);
 void ICACHE_FLASH_ATTR showConnected();
 void ICACHE_FLASH_ATTR showIP();
 void updateDisplay();
+void invalidateDisplay();
+void applyDisplaySettings();
+void wakeDisplay();
+bool isNightModeActive();
 void ICACHE_FLASH_ATTR displayWeather();
 void ICACHE_FLASH_ATTR displaySunTimes();
 void ICACHE_FLASH_ATTR applyDissolveEffect(uint8_t hidePercent, bool withDrift);
@@ -114,10 +116,13 @@ bool ICACHE_FLASH_ATTR isModeEnabled(uint8_t mode);
 
 // Weather functions (weather.cpp)
 void fetchWeatherAsync();
-void calculateSunTimes();
+void processWeather();
+void resetWeather();
 
 // Web server functions (web_server.cpp)
 void ICACHE_FLASH_ATTR setupWebServer();
+void setupWebUpdate();
+void serveWebUI();
 void ICACHE_FLASH_ATTR handleRoot();
 void ICACHE_FLASH_ATTR handleDebug();
 void ICACHE_FLASH_ATTR handleTestNTP();
@@ -137,6 +142,14 @@ void ICACHE_FLASH_ATTR handleI2CScan();
 // Config functions (in main .ino)
 void ICACHE_FLASH_ATTR loadConfig();
 void ICACHE_FLASH_ATTR saveConfig();
+
+bool setupMaintenance();
+const char* maintenancePassword();
+const char* authenticatedMaintenancePassword();
+bool requireMaintenanceAuth();
+void showMaintenanceCode();
+void handleShowMaintenancePIN();
+bool maintenanceCodeVisible();
 
 // OTA functions (in main .ino)
 void ICACHE_FLASH_ATTR setupOTA();

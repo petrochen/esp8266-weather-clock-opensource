@@ -1,15 +1,16 @@
 /*
  * config.h - Configuration structures and constants
- * TJ-56-654 Weather Clock v1.9.3
+ * TJ-56-654 Weather Clock
  */
 
 #ifndef CONFIG_H
 #define CONFIG_H
 
 #include <Arduino.h>
+#include "runtime_logic.h"
 
 // Firmware version
-#define FIRMWARE_VERSION "1.9.10"
+#define FIRMWARE_VERSION "1.10.0"
 
 // OLED I2C Configuration
 #define I2C_SDA 0  // GPIO0 (I2C Data) - SWAPPED!
@@ -28,7 +29,7 @@ struct Config {
   char password[64] = "";  // Empty - configured via WiFiManager captive portal
   long timezone_offset = 0; // Base UTC offset in seconds (0=Lisbon/London, 3600=Paris/Berlin)
   bool dst_enabled = true;  // Auto DST: +1 hour during summer (European rules: last Sun Mar-Oct)
-  int brightness = 4; // 0-7
+  int brightness = 4; // 0=dim, 7=bright; no screen-off level
   char ntp_server[64] = "pool.ntp.org";
   unsigned long ntp_interval = 3600; // NTP update interval in seconds (default: 1 hour)
   bool hour_format_24 = true; // true=24h, false=12h
@@ -48,46 +49,22 @@ struct Config {
   uint8_t display_orientation = 2;  // 0=0°, 1=90°, 2=180°, 3=270°
 };
 
-// Exponential backoff retry configuration (for NTP/Weather)
-struct RetryConfig {
-  uint8_t maxRetries = 3;          // Give up after 3 tries
-  uint8_t currentRetry = 0;
-  unsigned long nextRetryTime = 0;
-  unsigned long maxBackoffMs = 8000;  // Max backoff 8 seconds
-
-  unsigned long getBackoffDelay() {
-    unsigned long delay = 1000UL * (1UL << currentRetry);  // 1s, 2s, 4s, 8s...
-    return (delay > maxBackoffMs) ? maxBackoffMs : delay;
-  }
-
-  void scheduleRetry() {
-    if (currentRetry < maxRetries) {
-      nextRetryTime = millis() + getBackoffDelay();
-      currentRetry++;
-    } else {
-      nextRetryTime = 0;  // Max retries reached, stop
-    }
-  }
-
-  bool isRetryTime() {
-    // Subtraction-safe: works correctly across millis() rollover at ~49.7 days
-    return nextRetryTime > 0 && (millis() - nextRetryTime) < 0x80000000UL;
-  }
-
-  void reset() {
-    currentRetry = 0;
-    nextRetryTime = 0;
-  }
-
-  bool maxRetriesReached() {
-    return currentRetry >= maxRetries;
-  }
+// Independent, versioned EEPROM record; never extend the legacy Config layout.
+const uint16_t NIGHT_SETTINGS_ADDR = 416;
+const uint32_t NIGHT_SETTINGS_MAGIC = 0x4E495431; // NIT1
+struct NightSettings {
+  uint32_t magic = NIGHT_SETTINGS_MAGIC;
+  uint8_t enabled = 0;
+  uint8_t start_hour = 23, start_minute = 0;
+  uint8_t end_hour = 7, end_minute = 0;
+  uint8_t reserved[3] = {}; // Explicit bytes instead of uninitialized struct padding.
 };
 
 // WiFi retry configuration - infinite retries with longer backoff
 struct WiFiRetryConfig {
   uint8_t currentRetry = 0;
-  unsigned long nextRetryTime = 0;
+  uint32_t nextRetryTime = 0;
+  bool pending = false;
   static const unsigned long MAX_BACKOFF_MS = 300000;  // Max 5 minutes between retries
 
   unsigned long getBackoffDelay() {
@@ -97,33 +74,33 @@ struct WiFiRetryConfig {
   }
 
   void scheduleRetry() {
-    nextRetryTime = millis() + getBackoffDelay();
+    nextRetryTime = uint32_t(millis()) + getBackoffDelay();
+    pending = true;
     if (currentRetry < 10) currentRetry++;  // Cap at 10 to prevent overflow
   }
 
   bool isRetryTime() {
     // Subtraction-safe: works correctly across millis() rollover at ~49.7 days
-    return nextRetryTime > 0 && (millis() - nextRetryTime) < 0x80000000UL;
+    return pending && uint32_t(millis() - nextRetryTime) < 0x80000000UL;
   }
 
   void reset() {
     currentRetry = 0;
     nextRetryTime = 0;
+    pending = false;
   }
 };
 
 // Weather fetch state machine
 enum WeatherState {
   WEATHER_IDLE,
-  WEATHER_REQUESTING,
-  WEATHER_SUCCESS,
-  WEATHER_FAILED
+  WEATHER_REQUESTING
 };
 
-// Async NTP state machine — only IDLE and REQUEST_SENT are used
-// (response handler transitions back to IDLE directly on success or timeout)
+// Async NTP state machine, including non-blocking DNS resolution.
 enum NTPState {
   NTP_IDLE,
+  NTP_RESOLVING,
   NTP_REQUEST_SENT
 };
 
@@ -144,6 +121,7 @@ struct WeatherData {
   float windspeed = 0.0;
   unsigned long lastUpdate = 0;
   bool valid = false;
+  bool stale = true;
 };
 
 // Sunrise/Sunset cache

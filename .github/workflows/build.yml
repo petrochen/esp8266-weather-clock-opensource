@@ -1,0 +1,43 @@
+name: Firmware and host regressions
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: arduino/setup-arduino-cli@v2
+        with:
+          version: 1.4.1
+      - name: Install pinned board and libraries
+        run: |
+          arduino-cli config init
+          arduino-cli config add board_manager.additional_urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
+          arduino-cli core update-index
+          arduino-cli core install esp8266:esp8266@3.1.2
+          arduino-cli lib install 'Adafruit BusIO@1.17.4' 'Adafruit GFX Library@1.12.4' 'Adafruit SSD1306@2.5.16' 'ArduinoJson@7.4.2' 'WiFiManager@2.0.17' 'ESPAsyncTCP@1.2.4' 'AsyncHTTPRequest_Generic@1.13.0'
+      - name: Host regressions
+        run: python3 tests/run_host_tests.py --arduinojson "$HOME/Arduino/libraries/ArduinoJson/src"
+      - name: Check embedded web assets
+        run: python3 tools/embed_web.py --check
+      - name: Browser regressions
+        run: |
+          python3 -m pip install playwright==1.58.0
+          python3 -m playwright install --with-deps chromium
+          python3 tests/test_web.py
+      - name: Compile ESP-01S 1 MB
+        run: arduino-cli compile --fqbn esp8266:esp8266:generic:eesz=1M64,FlashMode=dio,xtal=80 --warnings all --build-path build firmware/weather_clock
+      - name: Check flash and instruction memory budgets
+        run: python3 tests/check_build_size.py build --size-tool "$HOME/.arduino15/packages/esp8266/tools/xtensa-lx106-elf-gcc/3.1.0-gcc10.3-e5f9fec/bin/xtensa-lx106-elf-size"
+      - name: Package verified firmware
+        env:
+          BUILD_REVISION: ${{ github.sha }}
+        run: python3 tools/package_firmware.py build/weather_clock.ino.bin --revision "$BUILD_REVISION"
+      - name: Upload firmware and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: weather-clock-${{ github.sha }}
+          path: build/artifacts/
+          if-no-files-found: error
+          retention-days: 30

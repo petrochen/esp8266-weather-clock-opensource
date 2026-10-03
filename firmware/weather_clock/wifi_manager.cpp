@@ -1,6 +1,6 @@
 /*
  * wifi_manager.cpp - WiFi connection management
- * TJ-56-654 Weather Clock v1.9.3
+ * TJ-56-654 Weather Clock
  */
 
 #include "globals.h"
@@ -13,6 +13,7 @@ void ICACHE_FLASH_ATTR processWiFiConnection() {
   // Check connection status
   if (WiFi.status() == WL_CONNECTED) {
     wifiConnState = WIFI_CONN_CONNECTED;
+    invalidateDisplay();
     wifiRetry.reset();
     internetConnected = true;
     Serial.println("\nWiFi connected!");
@@ -47,6 +48,7 @@ void ICACHE_FLASH_ATTR processWiFiConnection() {
     Serial.printf("\nWiFi connection failed. Retry in %lu seconds\n", nextRetryMs / 1000);
 
     wifiConnState = WIFI_CONN_FAILED;
+    invalidateDisplay();
     internetConnected = false;
 
     showNoWiFi(nextRetryMs / 1000);
@@ -107,6 +109,7 @@ void ICACHE_FLASH_ATTR setupWiFi() {
 
       showIP();
       wifiConnState = WIFI_CONN_CONNECTED;
+      invalidateDisplay();
       return;
     }
   }
@@ -132,6 +135,7 @@ void ICACHE_FLASH_ATTR setupWiFi() {
       Serial.println("\nWiFi connected via EEPROM credentials!");
       showIP();
       wifiConnState = WIFI_CONN_CONNECTED;
+      invalidateDisplay();
       return;
     }
   }
@@ -163,6 +167,7 @@ void ICACHE_FLASH_ATTR setupWiFi() {
       Serial.print("Fallback AP IP: ");
       Serial.println(WiFi.softAPIP());
       wifiConnState = WIFI_CONN_CONNECTED;
+      invalidateDisplay();
       return;
     }
 
@@ -180,6 +185,7 @@ void ICACHE_FLASH_ATTR setupWiFi() {
 
     showIP();
     wifiConnState = WIFI_CONN_CONNECTED;
+    invalidateDisplay();
     return;
   }
 

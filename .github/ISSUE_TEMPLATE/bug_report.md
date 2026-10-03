@@ -20,15 +20,15 @@ Steps to reproduce the behavior:
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 
-**Serial Monitor Output**
+**Serial Monitor Output (remove credentials and private network details)**
 If applicable, paste serial monitor output here:
 ```
 [paste output here]
 ```
 
 **Environment:**
- - Firmware version: [e.g., v1.9.1]
- - ESP8266 board package version: [e.g., 3.0.2]
+ - Firmware version: [e.g., v1.10.0]
+ - ESP8266 board package version: [e.g., 3.1.2]
  - Arduino IDE version: [e.g., 1.8.19]
  - Hardware: [e.g., TJ-56-654, custom ESP-01S]
 

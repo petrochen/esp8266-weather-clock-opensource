@@ -28,3 +28,7 @@ config_local.h
 
 # Internal backlogs (not for public repo)
 BACKLOG_*.md
+
+# Python test caches
+__pycache__/
+*.pyc

@@ -1,5 +1,5 @@
 /*
- * TJ-56-654 Weather Clock - Custom NTP Firmware with OTA v1.9.3
+ * TJ-56-654 Weather Clock - Custom NTP Firmware with OTA
  *
  * Hardware:
  * - ESP-01S (ESP8266)
@@ -23,7 +23,6 @@
 #include <ESP8266mDNS.h>
 #include <ArduinoOTA.h>
 #include <WiFiUdp.h>
-#include <NTPClient.h>
 #include <EEPROM.h>
 #include <ArduinoJson.h>
 #include <Wire.h>
@@ -33,6 +32,7 @@
 
 #include "config.h"
 #include "globals.h"
+#include "settings.h"
 
 // ============ Global variable definitions ============
 
@@ -44,7 +44,6 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 // NTP Client
 WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, "pool.ntp.org", 0, 60000);
 
 // Web server
 ESP8266WebServer server(80);
@@ -142,6 +141,9 @@ void ICACHE_FLASH_ATTR checkFactoryReset() {
     memset(config.password, 0, sizeof(config.password));
     EEPROM.end();          // close current handle before saveConfig opens its own
     saveConfig();          // commits cleared credentials to flash
+    WiFi.persistent(true);
+    WiFi.disconnect(true);
+    WiFi.persistent(false);
 
     EEPROM.begin(512);
     rc.count = 0;
@@ -212,7 +214,9 @@ void ICACHE_FLASH_ATTR saveConfig() {
 // ============ OTA setup ============
 
 void ICACHE_FLASH_ATTR setupOTA() {
+  if (!maintenancePassword()) return;
   ArduinoOTA.setHostname(config.hostname);
+  ArduinoOTA.setPassword(maintenancePassword());
 
   ArduinoOTA.onStart([]() {
     String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
@@ -277,22 +281,20 @@ void setup() {
     Serial.println("OLED initialized successfully!");
   }
 
-  // Set display rotation
-  display.setRotation(config.display_orientation);
-  Serial.printf("Display rotation: %d (180 deg)\n", config.display_orientation);
-
-  // Show startup animation
-  Serial.println("Showing startup animation...");
-  showStartupAnimation();
-
-  // Load configuration
+  // Apply persisted orientation/brightness before the first rendered frame.
   loadConfig();
+  loadNightSettings();
+  applyDisplaySettings();
+  showStartupAnimation();
 
   // Check for triple power-cycle factory reset (must be after display+config init)
   checkFactoryReset();
 
   // Setup WiFi
   setupWiFi();
+
+  // Maintenance code is independent of WiFi credentials and never exported.
+  setupMaintenance();
 
   // Setup OTA
   setupOTA();
@@ -301,17 +303,16 @@ void setup() {
   setupWebServer();
 
   // Setup NTP
-  timeClient = NTPClient(ntpUDP, config.ntp_server, 0, config.ntp_interval * 1000);
-  timeClient.begin();
-
-  // Test internet connectivity
-  testInternetConnectivity();
+  ntpUDP.begin(2390);
 
   // Initialize timing to prevent immediate flicker/transition
   lastBlinkTime = millis();
   lastModeSwitch = millis();
   colonBlink = true;
 
+  // Start normal display immediately; the PIN is shown only on user request.
+  ipDisplayUntil = 0;
+  invalidateDisplay();
   Serial.println("Setup complete!");
 }
 
@@ -334,6 +335,7 @@ void loop() {
       Serial.println("WiFi disconnected!");
       wifiConnState = WIFI_CONN_FAILED;
       internetConnected = false;
+      invalidateDisplay();
       wifiRetry.reset();
       wifiRetry.scheduleRetry();
     }
@@ -375,40 +377,9 @@ void loop() {
   // Process async WiFi reconnection
   processWiFiConnection();
 
-  // Process async NTP response
+  // Independent non-blocking network state machines.
   processNTPResponse();
-
-  // Check for NTP retry
-  if (ntpRetry.isRetryTime() && ntpState == NTP_IDLE) {
-    Serial.println("NTP retry time reached, attempting retry...");
-    sendNTPRequestAsync();
-  }
-
-  // Trigger async NTP update periodically
-  unsigned long ntpInterval = config.ntp_interval * 1000UL;
-  if (millis() - lastNTPUpdate > ntpInterval || lastNTPUpdate == 0) {
-    if (ntpState == NTP_IDLE && !ntpRetry.isRetryTime()) {
-      sendNTPRequestAsync();
-      lastNTPUpdate = millis();
-    }
-
-    if (timeIsSynced || timeClient.isTimeSet()) {
-      calculateSunTimes();
-    }
-  }
-
-  // Watchdog: reset if WEATHER_REQUESTING stuck >15s (TCP hang / half-open connection)
-  if (weatherState == WEATHER_REQUESTING && (millis() - weatherRequestStart) > 15000UL) {
-    Serial.println("Weather request timeout (TCP hang) — resetting state");
-    weatherState = WEATHER_IDLE;
-    weatherRetry.scheduleRetry();
-  }
-
-  // Check for weather retry
-  if (weatherRetry.isRetryTime() && weatherState == WEATHER_IDLE) {
-    Serial.println("Weather retry time reached, attempting retry...");
-    fetchWeatherAsync();
-  }
+  processWeather();
 
   // Clear factory-reset boot counter after 10s of normal operation
   static bool resetCounterCleared = false;
@@ -422,31 +393,10 @@ void loop() {
     Serial.println("Boot counter cleared — stable operation confirmed");
   }
 
-  // Update weather periodically (static flag avoids millis() > 10000 rollover trap)
-  static bool weatherBootReady = false;
-  if (!weatherBootReady && millis() > 10000UL) weatherBootReady = true;
-  if (config.weather_enabled && weatherBootReady) {
-    unsigned long weatherInterval = config.weather_interval * 1000UL;
-    if (millis() - lastWeatherUpdate > weatherInterval || lastWeatherUpdate == 0) {
-      if (timeClient.isTimeSet() && weatherState == WEATHER_IDLE && !weatherRetry.isRetryTime()) {
-        fetchWeatherAsync();
-        lastWeatherUpdate = millis();
-      }
-    }
-  }
-
-  // Check if IP display should be cleared
-  if (ipDisplayUntil > 0 && millis() >= ipDisplayUntil) {
-    clearDisplay();
-    ipDisplayUntil = 0;
-  }
-
-  // Update display with rotation
-  updateDisplayRotation();
-
   // Blink colon every second
   if (millis() - lastBlinkTime > 500) {
     colonBlink = !colonBlink;
     lastBlinkTime = millis();
   }
+  updateDisplayRotation();
 }

@@ -1,177 +1,142 @@
-/*
- * weather.cpp - Weather API functions
- * TJ-56-654 Weather Clock v1.9.3
- */
-
-// Include AsyncHTTPRequest BEFORE globals.h to provide full type definition
+/* Weather acquisition and retry scheduling. */
 #include <ESPAsyncTCP.h>
 #define ASYNCHTTPREQUEST_GENERIC_VERSION_MIN_TARGET "AsyncHTTPRequest_Generic v1.13.0"
 #define ASYNCHTTPREQUEST_GENERIC_VERSION_MIN 1013000
 #include <AsyncHTTPRequest_Generic.h>
-
 #include "globals.h"
 #include <ArduinoJson.h>
+#include <math.h>
 
-// Async HTTP client for weather (local to this file)
 static AsyncHTTPRequest weatherRequest;
+static bool weatherStarted = false;
 
-// Weather response callback
-void ICACHE_FLASH_ATTR onWeatherResponse(void* optParm, AsyncHTTPRequest* request, int readyState) {
-  (void)optParm;  // Unused
-
-  if (readyState == 4) {  // Request complete
-    weatherState = WEATHER_IDLE;
-
-    int httpCode = request->responseHTTPcode();
-    if (httpCode == 200) {
-      String payload = request->responseText();
-      Serial.printf("Weather response: %d bytes\n", payload.length());
-
-      // Parse JSON response
-      JsonDocument doc;
-      DeserializationError error = deserializeJson(doc, payload);
-
-      if (!error) {
-        // Extract current weather
-        JsonObject current = doc["current_weather"];
-        weather.temperature = current["temperature"] | 0.0f;
-        weather.weathercode = current["weathercode"] | -1;
-        weather.windspeed = current["windspeed"] | 0.0f;
-        weather.lastUpdate = millis();
-        weather.valid = true;
-
-        // Extract sunrise/sunset
-        JsonArray daily_sunrise = doc["daily"]["sunrise"];
-        JsonArray daily_sunset = doc["daily"]["sunset"];
-
-        if (daily_sunrise.size() > 0 && daily_sunset.size() > 0) {
-          const char* sunrise_str = daily_sunrise[0];
-          const char* sunset_str = daily_sunset[0];
-
-          // Parse ISO time (2026-01-02T07:52) -> HH:MM
-          if (sunrise_str && strlen(sunrise_str) >= 16) {
-            sunTimes.sunrise[0] = sunrise_str[11];
-            sunTimes.sunrise[1] = sunrise_str[12];
-            sunTimes.sunrise[2] = ':';
-            sunTimes.sunrise[3] = sunrise_str[14];
-            sunTimes.sunrise[4] = sunrise_str[15];
-            sunTimes.sunrise[5] = '\0';
-
-            sunTimes.sunriseMinutes = (sunrise_str[11] - '0') * 600 +
-                                      (sunrise_str[12] - '0') * 60 +
-                                      (sunrise_str[14] - '0') * 10 +
-                                      (sunrise_str[15] - '0');
-          }
-
-          if (sunset_str && strlen(sunset_str) >= 16) {
-            sunTimes.sunset[0] = sunset_str[11];
-            sunTimes.sunset[1] = sunset_str[12];
-            sunTimes.sunset[2] = ':';
-            sunTimes.sunset[3] = sunset_str[14];
-            sunTimes.sunset[4] = sunset_str[15];
-            sunTimes.sunset[5] = '\0';
-
-            sunTimes.sunsetMinutes = (sunset_str[11] - '0') * 600 +
-                                     (sunset_str[12] - '0') * 60 +
-                                     (sunset_str[14] - '0') * 10 +
-                                     (sunset_str[15] - '0');
-          }
-
-          // Update lastDay
-          time_t epochTime = timeClient.getEpochTime();
-          struct tm *ptm = gmtime(&epochTime);
-          sunTimes.lastDay = ptm->tm_yday;
-        }
-
-        // weatherState stays WEATHER_IDLE (set at readyState==4 entry) — allows periodic refresh
-        weatherRetry.reset();
-        Serial.printf("Weather: %.1f C, code %d, wind %.1f km/h\n",
-                      weather.temperature, weather.weathercode, weather.windspeed);
-      } else {
-        weatherState = WEATHER_FAILED;
-        weather.valid = false;
-        lastError = String("JSON: ") + error.c_str();
-        Serial.printf("JSON parse error (attempt %d/%d): %s\n",
-                      weatherRetry.currentRetry + 1, weatherRetry.maxRetries, error.c_str());
-
-        weatherRetry.scheduleRetry();
-        if (weatherRetry.maxRetriesReached()) {
-          // Reset so periodic refresh can retry after weatherInterval — prevents permanent lockup
-          Serial.println("Weather max retries reached, resetting for next interval");
-          weatherRetry.reset();
-          weatherState = WEATHER_IDLE;
-        } else {
-          unsigned long backoff = weatherRetry.getBackoffDelay() / 1000;
-          Serial.printf("  Retry scheduled in %lu seconds\n", backoff);
-        }
-      }
-
-      doc.clear();
-    } else {
-      weatherState = WEATHER_FAILED;
-      weather.valid = false;
-      lastError = "Weather API: " + String(httpCode);
-      Serial.printf("HTTP error %d (attempt %d/%d)\n",
-                    httpCode, weatherRetry.currentRetry + 1, weatherRetry.maxRetries);
-
-      weatherRetry.scheduleRetry();
-      if (weatherRetry.maxRetriesReached()) {
-        // Reset so periodic refresh can retry after weatherInterval — prevents permanent lockup
-        Serial.println("Weather max retries reached, resetting for next interval");
-        weatherRetry.reset();
-        weatherState = WEATHER_IDLE;
-      } else {
-        unsigned long backoff = weatherRetry.getBackoffDelay() / 1000;
-        Serial.printf("  Retry scheduled in %lu seconds\n", backoff);
-      }
-    }
+static void ICACHE_FLASH_ATTR weatherFailed(const String& message) {
+  // Keep the last good reading visible, but explicitly mark it stale.
+  lastError = message;
+  weather.stale = true;
+  weatherState = WEATHER_IDLE;
+  if (!weatherRetry.scheduleRetry(millis())) {
+    weatherRetry.reset();
+    lastWeatherUpdate = millis();  // exhausted burst: wait a full normal interval
   }
+  invalidateDisplay();
 }
 
-// Async weather fetch - non-blocking!
+static bool ICACHE_FLASH_ATTR parseSunTime(const char* value, char* text, int& minutes) {
+  if (!value || strlen(value) < 16 || value[10] != 'T' || value[13] != ':') return false;
+  const int positions[] = {11, 12, 14, 15};
+  for (int pos : positions) if (value[pos] < '0' || value[pos] > '9') return false;
+  int hour = (value[11] - '0') * 10 + value[12] - '0';
+  int minute = (value[14] - '0') * 10 + value[15] - '0';
+  if (hour > 23 || minute > 59) return false;
+  memcpy(text, value + 11, 5);
+  text[5] = '\0';
+  minutes = hour * 60 + minute;
+  return true;
+}
+
+void ICACHE_FLASH_ATTR onWeatherResponse(void*, AsyncHTTPRequest* request, int readyState) {
+  if (readyState != 4 || weatherState != WEATHER_REQUESTING) return;
+  int code = request->responseHTTPcode();
+  if (code != 200) {
+    weatherFailed(String("Weather API: ") + code);
+    return;
+  }
+
+  JsonDocument doc;
+  String payload = request->responseText();
+  if (deserializeJson(doc, payload.c_str())) {
+    weatherFailed(F("Weather: invalid JSON"));
+    return;
+  }
+  JsonObject current = doc["current_weather"];
+  if (!current["temperature"].is<float>() || !current["windspeed"].is<float>() ||
+      !current["weathercode"].is<int>()) {
+    weatherFailed(F("Weather: missing fields"));
+    return;
+  }
+  float temperature = current["temperature"];
+  float windspeed = current["windspeed"];
+  int codeValue = current["weathercode"];
+  if (!isfinite(temperature) || !isfinite(windspeed) || temperature < -100 ||
+      temperature > 70 || windspeed < 0 || codeValue < 0 || codeValue > 99) {
+    weatherFailed(F("Weather: invalid values"));
+    return;
+  }
+
+  weather.temperature = temperature;
+  weather.windspeed = windspeed;
+  weather.weathercode = codeValue;
+  weather.lastUpdate = millis();
+  weather.valid = true;
+  weather.stale = false;
+
+  SunTimes nextSun;
+  if (parseSunTime(doc["daily"]["sunrise"][0], nextSun.sunrise, nextSun.sunriseMinutes) &&
+      parseSunTime(doc["daily"]["sunset"][0], nextSun.sunset, nextSun.sunsetMinutes)) {
+    time_t epoch = getAsyncEpoch();
+    nextSun.lastDay = timeIsSynced ? gmtime(&epoch)->tm_yday : 0;
+  }
+  sunTimes = nextSun;  // do not leave yesterday's sun times after a partial response
+  weatherRetry.reset();
+  weatherState = WEATHER_IDLE;
+  lastError = "";
+  invalidateDisplay();
+}
+
 void ICACHE_FLASH_ATTR fetchWeatherAsync() {
-  if (!config.weather_enabled) {
-    Serial.println(F("Weather disabled"));
-    return;
-  }
+  if (!config.weather_enabled || WiFi.status() != WL_CONNECTED ||
+      weatherState != WEATHER_IDLE) return;
 
-  if (weatherState != WEATHER_IDLE) {
-    Serial.println(F("Weather request already in progress"));
-    return;
-  }
+  char url[240];
+  snprintf(url, sizeof(url),
+    "http://api.open-meteo.com/v1/forecast?latitude=%.6f&longitude=%.6f"
+    "&current_weather=true&daily=sunrise,sunset&timezone=auto&forecast_days=1",
+    config.latitude, config.longitude);
 
-  // Build URL
-  String url = "http://api.open-meteo.com/v1/forecast?";
-  url += "latitude=" + String(config.latitude, 2);
-  url += "&longitude=" + String(config.longitude, 2);
-  url += "&current_weather=true";
-  url += "&daily=sunrise,sunset";
-  url += "&timezone=auto";
-  url += "&forecast_days=1";
-
-  Serial.println(F("Fetching weather (async)..."));
-
-  if (weatherRequest.open("GET", url.c_str())) {
-    weatherRequest.onReadyStateChange(onWeatherResponse);
-    weatherRequest.setTimeout(10);  // 10 seconds
-    weatherRequest.send();
-    weatherState = WEATHER_REQUESTING;
-    weatherRequestStart = millis();
-    Serial.println("Weather request sent (non-blocking)");
-  } else {
-    weatherState = WEATHER_FAILED;
-    Serial.println("Failed to open weather request");
+  weatherStarted = true;
+  lastWeatherUpdate = millis();
+  weatherRetry.consume();
+  weatherRequestStart = millis();
+  // Set state before open/send: callbacks can run synchronously on failure.
+  weatherState = WEATHER_REQUESTING;
+  weatherRequest.onReadyStateChange(onWeatherResponse);
+  weatherRequest.setTimeout(10);
+  if (!weatherRequest.open("GET", url) || !weatherRequest.send()) {
+    if (weatherState == WEATHER_REQUESTING) weatherFailed(F("Weather: request failed"));
   }
 }
 
-// Calculate sun times (placeholder - data comes from API)
-void ICACHE_FLASH_ATTR calculateSunTimes() {
-  if (!config.show_sunrise_sunset) return;
+void ICACHE_FLASH_ATTR resetWeather() {
+  // Suppress the abort callback before releasing the transport.
+  weatherState = WEATHER_IDLE;
+  weatherRequest.abort();
+  weatherRetry.reset();
+  weatherStarted = false;
+  weather = WeatherData();
+  sunTimes = SunTimes();
+  invalidateDisplay();
+}
 
-  if (sunTimes.lastDay != -1) {
-    Serial.println(F("Sun times already available from API"));
-    return;
+void ICACHE_FLASH_ATTR processWeather() {
+  if (weather.valid && !weather.stale &&
+      uint32_t(millis() - weather.lastUpdate) >= config.weather_interval * 1000UL) {
+    weather.stale = true;
+    invalidateDisplay();
   }
+  if (weatherState == WEATHER_REQUESTING && uint32_t(millis() - weatherRequestStart) > 15000UL) {
+    weatherState = WEATHER_IDLE;
+    weatherRequest.abort();
+    weatherFailed(F("Weather: request timeout"));
+  }
+  static bool bootReady = false;
+  if (millis() > 10000UL) bootReady = true;
+  if (!bootReady || !config.weather_enabled || WiFi.status() != WL_CONNECTED ||
+      weatherState != WEATHER_IDLE) return;
 
-  Serial.println(F("Sun times not available yet - will be fetched with weather"));
+  if (weatherRetry.pending) {
+    if (weatherRetry.isRetryTime(millis())) fetchWeatherAsync();
+  } else if (!weatherStarted || uint32_t(millis() - lastWeatherUpdate) >= config.weather_interval * 1000UL) {
+    fetchWeatherAsync();
+  }
 }

@@ -5,6 +5,79 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-10-03
+
+PIN-only maintenance, a refreshed web interface, night mode and
+network recovery fixes. This entry includes the local 1.9.11–1.9.13 development
+builds; they were not separate published releases. The previous public release is
+1.9.10. See the [release notes](docs/releases/v1.10.0.md) for upgrade instructions.
+
+### Added
+
+- Optional OLED night schedule using synchronized local time, including windows
+  across midnight. A separate versioned EEPROM record leaves legacy settings
+  intact and defaults to disabled on upgrade. PIN/test display actions wake the OLED.
+- Persistent random six-digit maintenance PIN, shown as `xxx-xxx` on the physical
+  display for 30 seconds when requested. No PIN screen or delay is added at startup.
+- Native 16×16 weather icons in flash, with corrected overcast/thunderstorm mapping
+  and distinct partly-cloudy and unknown conditions. Bitmap integration was adapted
+  with night mode and startup orientation from Stibax's fork; the eight current
+  glyphs are hand-drawn local replacements, with hollow clouds and distinct
+  precipitation silhouettes. See [provenance](docs/BACKPORTS.md).
+- CI artifacts containing a version/commit-named `.bin`, SHA-256 and build metadata
+  after pinned host/browser/build checks and memory budgets pass. No automatic
+  release publication.
+
+### Changed
+
+- Replace the browser login with a PIN field. The UI checks the PIN before sending
+  firmware; the upload guard authenticates chunks and final POST before the core
+  writer. Legacy Basic-auth scripts remain compatible; ArduinoOTA uses six digits.
+- Redesign the English desktop/mobile interface around Clock, Settings and Update,
+  with a single firmware selector, progress, error states and on-demand diagnostics.
+- Fit all settings into four compact desktop groups with aligned labels and visible
+  NTP options. Track unsaved changes, send only changed fields and support local
+  Discard; keep touch controls large and focused fields clear of the sticky action bar.
+- Serve a self-contained gzip page from flash with ETag caching. No framework,
+  external fonts or filesystem image; browser seconds tick locally and status
+  polls once per minute only while the dashboard is visible.
+- Use one asynchronous DNS/UDP NTP path. Web time text and OLED share local time;
+  API epoch stays UTC. Remove the NTPClient library dependency.
+- Keep the last good weather reading on failure with a stale marker and age.
+- Redraw static OLED screens only when needed; use bounded dissolve masks, skip
+  transitions to the same screen, and use deadlines for connection/test overlays.
+- Validate form/JSON settings consistently before saving. Keep ordinary settings
+  open; omit WiFi passwords from pages, exports and application logs. Blank or
+  omitted passwords preserve the saved one; `clear_password:true` selects an open network.
+- Keep the legacy Config/PIN EEPROM layout. Commit validated legacy and night
+  settings together and report failed storage before applying runtime changes.
+- Shorten README while retaining the original discovery story; split user/API
+  references into dedicated guides and correct installation, recovery and memory docs.
+
+### Fixed
+
+- Weather recovery after HTTP/JSON/open errors and watchdog timeout; retry bursts
+  return to normal scheduling and cancel stalled transport.
+- NTP startup DNS recovery, duplicate requests, late DNS callbacks and clock rollover.
+- Missing/empty firmware uploads return HTTP 400 without starting OTA or rebooting.
+  Core validation errors with HTTP 200 are shown as failures in the browser.
+- Brightness zero remains visible. This repairs the black-screen regression in
+  the intermediate 1.9.11-dev build; out-of-range legacy values are clamped.
+- Apply saved orientation and brightness before drawing the startup frame.
+- Clear SDK WiFi credentials during recovery/reset, preventing unwanted reconnect
+  through the SDK cache. Physical recovery retains other settings and the PIN;
+  HTTP full reset clears them.
+
+### Validation
+
+- Host regressions cover network failures, DNS/timers, settings atomicity, PIN
+  storage/authentication, upload guard ordering, night windows and OLED scheduling.
+- Chromium exercises actual UI sources with a simulated API, including widths down
+  to 320px, uploads, maintenance dialogs, data escaping and hidden-tab polling.
+- Hardware tests are read-only by default; non-network settings fuzz is opt-in.
+- See [validation notes](docs/VALIDATION.md) for measured builds and remaining
+  hardware OTA, night-mode, runtime-heap and long-duration checks.
+
 ## [1.9.10] - 2026-09-20
 
 ### Fixed
