@@ -22,7 +22,7 @@ I bought a cute weather clock kit from AliExpress ([TJ-56-654](https://pt.aliexp
 *An early look at the 1.11 beta, rendered by the firmware with sample data.
 [Still image](images/clock-demo-poster.png) · [All screens](docs/OLED_PREVIEWS.md).*
 
-**Want to use it?** Start with the [installation guide](docs/INSTALLATION.md), grab a published binary from [Releases](https://github.com/petrochen/esp8266-weather-clock-opensource/releases), or read [what's new in 1.10.0](docs/releases/v1.10.0.md). The last published stable release is **1.10.0**. Try **[1.11.0-beta.3](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.0-beta.3)** as a pre-release for testing the GitHub update flow from beta.2; see its [notes](docs/releases/v1.11.0-beta.3.md) before installing.
+**Want to use it?** Start with the [installation guide](docs/INSTALLATION.md), grab a published binary from [Releases](https://github.com/petrochen/esp8266-weather-clock-opensource/releases), or read [what's new in 1.10.0](docs/releases/v1.10.0.md). The last published stable release is **1.10.0**. Try **[1.11.0-beta.4](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.0-beta.4)** as a pre-release with version selection, rollback warnings and verified update completion; see its [notes](docs/releases/v1.11.0-beta.4.md) before installing.
 
 **Here for the story?** Read on.
 
@@ -137,8 +137,8 @@ readability, not a startup benchmark. [Still image](images/wifi-demo-poster.png)
 **Already running this firmware?** Open `/update`, choose the clock's `.bin`, press **Show PIN on clock**, enter the six digits, then choose **Upload & restart**. The current installed version handles that first upload, so an older version can still require its existing login/code. The new page appears after the update.
 
 From **1.11.0-beta.2**, that page can also check the project's **Stable** or
-**Stable + Beta** channel and install with your PIN. The prepared
-[beta.4](docs/releases/v1.11.0-beta.4.md) adds explicit version selection,
+**Stable + Beta** channel and install with your PIN. From
+[beta.4](docs/releases/v1.11.0-beta.4.md), you also get explicit version selection,
 reinstallation and downgrade warnings; see [update compatibility](docs/UPDATES.md). Your browser downloads and
 checks the image; the little ESP does not have to talk HTTPS to GitHub. The
 [update channel](docs/UPDATES.md) supplies verified images for both choices.
