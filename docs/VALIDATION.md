@@ -3,10 +3,12 @@
 ## 1.11.0-beta.2 local validation
 
 Prepared on 2026-10-03; not yet published or flashed. The pinned isolated Linux
-build passed with **478,672 bytes** (560 bytes below the same OTA limit), **38,832
+build passed with **476,496 bytes** (2,736 bytes below the same OTA limit), **38,464
 bytes static RAM** and **62,007 / 65,536 instruction bytes including cache**.
-The embedded web page is 59,519 bytes before gzip and 18,329 bytes in flash.
-Firmware is 48 bytes larger than beta.1 with the browser updater and verified saves.
+The embedded web page is 59,549 bytes before gzip and 18,340 bytes in flash.
+Firmware is 2,128 bytes smaller than beta.1 with the browser updater and verified saves.
+The [optimization audit](CODE_QUALITY.md) compares the cleanup against the preceding
+local beta.2 build and separates linked sizes from unmeasured hardware performance.
 
 Passed: all host regressions; the new HTTP update harness with ASan/UBSan;
 browser SHA-256 comparisons against Node crypto through 479,232 bytes; semantic
@@ -24,6 +26,12 @@ On the user's installed early beta.1, enabling the weather pages restored rotati
 the user confirmed the physical display changed. Toggling Wind off/on through
 the real browser form and reloading retained both saves. This verifies the installed
 build's current behavior, not the new beta.2 code; the original reset was not reproduced.
+
+The code-quality revision passed all seven host executables with ASan/UBSan,
+including new weather-boundary and JSON-reader compatibility cases. ESLint and
+Ruff passed with the pinned versions. The complete embedded browser suite and
+release hashing/catalog tests passed again. The duplicate String-reader parser
+is absent from the final ELF; API limits and EEPROM layouts are unchanged.
 
 Embedded-asset reproducibility, script syntax, workflow YAML parsing and diff
 whitespace checks passed. The new publication workflow has not run on GitHub;

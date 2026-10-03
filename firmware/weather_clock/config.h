@@ -170,7 +170,7 @@ struct WeatherData {
 struct SunTimes {
   int sunriseMinutes = 0;  // Minutes since midnight
   int sunsetMinutes = 0;
-  int lastDay = -1;        // Day of year
+  int lastDay = -1;        // Local days since Unix epoch; -1 when unavailable
   char sunrise[6] = "--:--";  // HH:MM format
   char sunset[6] = "--:--";
 };

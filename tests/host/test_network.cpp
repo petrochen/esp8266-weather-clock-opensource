@@ -57,6 +57,32 @@ int main() {
   weatherRequest.complete();
   assert(weather.valid && !weather.comfortValid && weather.humidity == -1 && !forecast.count && sunTimes.lastDay == -1);
   fetchWeatherAsync(); weatherRequest.payload = goodWeather; weatherRequest.complete();
+  const float latitude = config.latitude, longitude = config.longitude;
+  config.latitude = 90; config.longitude = -180;
+  fetchWeatherAsync(); weatherRequest.payload = goodWeather; weatherRequest.complete();
+  assert(weatherRequest.url.find("latitude=90.000000&longitude=-180.000000") != String::npos);
+  assert(!weather.stale && weatherRequest.url.size() < 512);
+  config.latitude = latitude; config.longitude = longitude;
+  // The exact response cap still works; truncated JSON cannot replace cached data.
+  fetchWeatherAsync(); weatherRequest.payload = goodWeather;
+  weatherRequest.payload.append(3072 - weatherRequest.payload.size(), ' ');
+  weatherRequest.complete(); assert(weather.valid && !weather.stale);
+  fetchWeatherAsync(); weatherRequest.payload = std::string(goodWeather).substr(0, strlen(goodWeather) - 1);
+  weatherRequest.complete(); assert(weather.valid && weather.stale && weather.temperature == 22.5f);
+  for (const char* invalid : {"true", "null", "\"22\"", "1e309", "-101", "71"}) {
+    fetchWeatherAsync();
+    weatherRequest.payload = String("{\"current\":{\"time\":1791028800,\"temperature_2m\":") + invalid + ",\"weather_code\":1,\"wind_speed_10m\":4}}";
+    weatherRequest.complete(); assert(weather.stale && weather.temperature == 22.5f);
+  }
+  for (const char* invalid : {"true", "null", "\"4\"", "1e309", "-1", "501"}) {
+    fetchWeatherAsync();
+    weatherRequest.payload = String("{\"current\":{\"time\":1791028800,\"temperature_2m\":22,\"weather_code\":1,\"wind_speed_10m\":") + invalid + "}}";
+    weatherRequest.complete(); assert(weather.stale && weather.windspeed == 4.0f);
+  }
+  fetchWeatherAsync();
+  weatherRequest.payload = R"({"current":{"time":1791028800,"temperature_2m":-100,"weather_code":99,"wind_speed_10m":500}})";
+  weatherRequest.complete(); assert(!weather.stale && weather.temperature == -100 && weather.windspeed == 500);
+  fetchWeatherAsync(); weatherRequest.payload = goodWeather; weatherRequest.complete();
   std::cout << "PASS: weather 502 recovery, stale cache, invalid schema, retry exhaustion, watchdog abort, open failure, synchronous callback\n";
 
   // Failed startup DNS does not gate future attempts.
@@ -78,10 +104,15 @@ int main() {
   assert(getAsyncEpoch()==1791028800UL);
   config.dst_enabled = false; config.timezone_offset = 3600; refreshSunTimes();
   assert(!strcmp(sunTimes.sunrise, "08:30")); // UTC event + selected clock offset
+  auto drawn = invalidations;
+  refreshSunTimes(); assert(invalidations == drawn); // unchanged events do not redraw
+  forecast.days[0].sunrise += 60; refreshSunTimes();
+  assert(!strcmp(sunTimes.sunrise, "08:31") && invalidations == drawn + 1);
+  forecast.days[0].sunrise -= 60;
   config.timezone_offset = -3600; refreshSunTimes();
   assert(!strcmp(sunTimes.sunrise, "06:30"));
   syncedEpoch = 1791259200; syncedMillis = fakeMillis; refreshSunTimes();
-  assert(sunTimes.lastDay == -1); // never keep yesterday's event after cache expires
+  assert(sunTimes.lastDay == -1 && !strcmp(sunTimes.sunrise, "--:--")); // expired event
   processWeather(); assert(weather.stale && weatherSourceAge() >= 172800);
   syncedEpoch = 1791028800;
   syncedMillis=UINT32_MAX-499;fakeMillis=500;

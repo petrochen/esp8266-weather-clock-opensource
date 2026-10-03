@@ -3,6 +3,13 @@
   "private": true,
   "description": "Build-only minification for the embedded ESP-01S web interface",
   "devDependencies": {
-    "esbuild": "0.28.2"
+    "@eslint/js": "10.0.1",
+    "esbuild": "0.28.2",
+    "eslint": "10.12.0",
+    "globals": "17.13.0"
+  },
+  "scripts": {
+    "lint": "eslint web tools/*.cjs tests/*.cjs eslint.config.cjs --max-warnings=0",
+    "check:web": "python3 tools/embed_web.py --check"
   }
 }

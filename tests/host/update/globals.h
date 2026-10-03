@@ -3,7 +3,6 @@
 #include <functional>
 #include <vector>
 #define PROGMEM
-#define PSTR(x) x
 enum HTTPMethod { HTTP_GET, HTTP_POST };
 enum HTTPUploadStatus { UPLOAD_FILE_START, UPLOAD_FILE_WRITE, UPLOAD_FILE_END, UPLOAD_FILE_ABORTED };
 struct HTTPUpload {

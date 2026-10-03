@@ -151,8 +151,9 @@ The pages share a static gzip bundle generated from `web/` by
 `python3 tools/embed_web.py`. It streams from PROGMEM, includes no external
 libraries/fonts and needs no filesystem. ETag/304 revalidation avoids repeated
 transfers. The dashboard polls one combined `/api/status` per minute while visible;
-seconds are calculated in the browser. Settings fetch configuration only when
-opened. Diagnostics fetch additional data only on demand. Existing API routes
+seconds are calculated in the browser. Settings fetch configuration when opened
+and read it back after saves that do not restart the device. Diagnostics fetch
+additional data only on demand. Existing API routes
 and fields remain; status adds epoch, offset, weather and display state.
 
 ## Memory and validation

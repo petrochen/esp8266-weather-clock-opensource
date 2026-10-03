@@ -7,6 +7,8 @@
 #define PROGMEM
 #define ICACHE_FLASH_ATTR
 #define F(x) x
+#define PSTR(x) (x)
+#define snprintf_P snprintf
 #ifndef pgm_read_byte
 #define pgm_read_byte(addr) (*(const uint8_t *)(addr))
 #endif

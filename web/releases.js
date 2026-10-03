@@ -1,4 +1,5 @@
 // Browser-only release checks. No GitHub request or firmware buffer on the ESP.
+/* exported releases */
 const releases = (() => {
   const repo = 'petrochen/esp8266-weather-clock-opensource';
   const base = `https://raw.githubusercontent.com/${repo}/codex/firmware-updates/`;
@@ -43,7 +44,7 @@ const releases = (() => {
       for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
       return bytes;
     } catch (error) {
-      if (error.name === 'AbortError' || error instanceof TypeError) throw Error('Cannot download from GitHub. Check your internet connection or use a local file.');
+      if (error.name === 'AbortError' || error instanceof TypeError) throw Error('Cannot download from GitHub. Check your internet connection or use a local file.', {cause: error});
       throw error;
     } finally { clearTimeout(timer); }
   }

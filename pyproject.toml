@@ -1,0 +1,10 @@
+[tool.ruff]
+target-version = "py310"
+extend-exclude = ["build", "node_modules"]
+
+[tool.ruff.lint]
+# Correctness first; existing compact test fixtures are not a formatting migration.
+select = ["E9", "F"]
+
+[tool.ruff.format]
+quote-style = "single"

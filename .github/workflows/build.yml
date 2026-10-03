@@ -12,6 +12,16 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install pinned development checks
+        run: python3 -m pip install -r requirements-dev.txt
+      - name: Lint source and scripts
+        run: |
+          npm run lint
+          python3 -m ruff check tools tests
       - uses: arduino/setup-arduino-cli@v2
         with:
           version: 1.4.1
@@ -23,7 +33,7 @@ jobs:
           arduino-cli core install esp8266:esp8266@3.1.2
           arduino-cli lib install --no-deps 'Adafruit BusIO@1.17.4' 'Adafruit GFX Library@1.12.4' 'Adafruit SSD1306@2.5.16' 'ArduinoJson@7.4.2' 'WiFiManager@2.0.17' 'ESPAsyncTCP@1.2.4' 'AsyncHTTPRequest_Generic@1.13.0'
       - name: Host regressions
-        run: python3 tests/run_host_tests.py --arduinojson "$HOME/Arduino/libraries/ArduinoJson/src"
+        run: python3 tests/run_host_tests.py --arduinojson "$HOME/Arduino/libraries/ArduinoJson/src" --sanitize
       - name: Release channel regressions
         run: |
           node tests/test_releases.cjs
@@ -34,7 +44,6 @@ jobs:
         run: python3 tools/embed_web.py --check
       - name: Browser regressions
         run: |
-          python3 -m pip install playwright==1.58.0
           python3 -m playwright install --with-deps chromium
           python3 tests/test_web.py
           python3 tests/test_portal.py --wifimanager "$HOME/Arduino/libraries/WiFiManager"

@@ -20,7 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   show an error if the clock returns different values or cannot be reached.
 - Clarify that presets replace individual screen choices, mark manual adjustments
   as Custom, and explain disabled screen options on the Clock page.
-- Keep memory budgets unchanged: 478,672-byte firmware, 38,832-byte static RAM.
+- Share the JSON reader across HTTP handlers, avoid repeated weather conversions
+  and sun-label formatting, and store the weather URL format in flash.
+- Add pinned ESLint/Ruff checks, EditorConfig/clang-format guidance and optional
+  ASan/UBSan across all host suites, enabled in CI.
+- Keep memory budgets unchanged: 476,496-byte firmware, 38,464-byte static RAM.
 
 See [prepared beta.2 notes](docs/releases/v1.11.0-beta.2.md). Publication and physical
 OTA testing are pending.

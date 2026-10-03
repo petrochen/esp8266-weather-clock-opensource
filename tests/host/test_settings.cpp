@@ -10,6 +10,18 @@ static bool apply(Config& config, const char* json) {
   return updateSettings(config, doc.as<JsonObjectConst>(), error);
 }
 int main() {
+  // HTTP endpoints share the C-string reader. Preserve String-reader semantics
+  // for nesting limits, escaped text, Unicode and malformed request bodies.
+  for (const std::string input : {R"({"action":"show","screen":8})", R"({"title":"Portim\u00e3o","value":"a\"b"})",
+       R"({"a":{"b":{"c":1}}})", R"({"action":)", "[]", "", R"({"value":"a\u0000b"})"}) {
+    JsonDocument previous, shared;
+    auto before = deserializeJson(previous, input, DeserializationOption::NestingLimit(2));
+    auto after = deserializeJson(shared, input.c_str(), DeserializationOption::NestingLimit(2));
+    assert(before == after && previous.is<JsonObject>() == shared.is<JsonObject>());
+    std::string left, right;
+    serializeJson(previous, left); serializeJson(shared, right);
+    assert(left == right);
+  }
   Config c;
   strcpy(c.ssid, "home");
   strcpy(c.password, "test-only-password");

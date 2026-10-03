@@ -33,3 +33,5 @@ BACKLOG_*.md
 __pycache__/
 *.pyc
 node_modules/
+.venv/
+.ruff_cache/

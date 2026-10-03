@@ -7,9 +7,10 @@ public:
   bool openResult = true, sendResult = true, synchronous = false;
   int sends = 0, aborts = 0, code = 200;
   String payload;
+  String url;
   void onReadyStateChange(Callback cb) { callback = cb; }
   void setTimeout(int) {}
-  bool open(const char*, const char*) { return openResult; }
+  bool open(const char*, const char* target) { url = target; return openResult; }
   bool send() { ++sends; if (synchronous) complete(); return sendResult; }
   void abort() { ++aborts; if (callback) callback(nullptr, this, 4); }
   int responseHTTPcode() { return code; }

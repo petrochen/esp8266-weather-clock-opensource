@@ -34,8 +34,8 @@
       if (!response.ok) throw new Error(data?.error || text || `Request failed (${response.status}).`);
       return data;
     } catch (error) {
-      if (error.name === 'AbortError') throw new Error('The clock took too long to respond. Try again.');
-      if (error instanceof TypeError) throw new Error('Cannot reach the clock. Check its power and Wi-Fi connection.');
+      if (error.name === 'AbortError') throw new Error('The clock took too long to respond. Try again.', {cause: error});
+      if (error instanceof TypeError) throw new Error('Cannot reach the clock. Check its power and Wi-Fi connection.', {cause: error});
       throw error;
     } finally { clearTimeout(timeout); }
   }

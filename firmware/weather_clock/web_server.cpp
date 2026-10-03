@@ -250,8 +250,11 @@ void ICACHE_FLASH_ATTR handleAPIConfigExport() {
 }
 
 static bool ICACHE_FLASH_ATTR readObject(JsonDocument& doc, size_t limit) {
-  if (!server.hasArg("plain") || server.arg("plain").length() > limit ||
-      deserializeJson(doc, server.arg("plain"), DeserializationOption::NestingLimit(2)) || !doc.is<JsonObject>()) {
+  const String body = server.arg("plain");
+  // Match the other JSON entry points: one reader type avoids another parser
+  // instantiation in flash. ArduinoJson 7 copies strings into the document.
+  if (!server.hasArg("plain") || body.length() > limit ||
+      deserializeJson(doc, body.c_str(), DeserializationOption::NestingLimit(2)) || !doc.is<JsonObject>()) {
     server.send(400, "text/plain", F("Invalid or oversized JSON object")); return false;
   }
   return true;
@@ -286,12 +289,12 @@ static void ICACHE_FLASH_ATTR handleExternalCard() {
 }
 
 void ICACHE_FLASH_ATTR handleAPIConfigImport() {
-  if (!server.hasArg("plain") || server.arg("plain").length() > 2048) {
+  const String body = server.arg("plain");
+  if (!server.hasArg("plain") || body.length() > 2048) {
     server.send(400, "text/plain", F("Expected a settings object (max 2048 bytes)"));
     return;
   }
   JsonDocument doc;
-  String body = server.arg("plain");
   if (deserializeJson(doc, body.c_str(), DeserializationOption::NestingLimit(3)) || !doc.is<JsonObject>()) {
     server.send(400, "text/plain", F("Invalid settings JSON"));
     return;

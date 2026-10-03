@@ -12,6 +12,7 @@ import tempfile
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--arduinojson', default=os.environ.get('ARDUINOJSON_DIR'))
+parser.add_argument('--sanitize', action='store_true', help='Enable AddressSanitizer and UndefinedBehaviorSanitizer')
 args = parser.parse_args()
 if not args.arduinojson:
     parser.error('set --arduinojson or ARDUINOJSON_DIR to ArduinoJson/src')
@@ -27,6 +28,8 @@ with tempfile.TemporaryDirectory(prefix='weather-clock-host-') as work:
     common = [os.environ.get('CXX', 'c++'), '-std=c++17', '-Wall', '-Wextra', '-Werror',
               '-I' + str(root / 'tests/host'), '-I' + str(stage),
               '-I' + str(source), '-I' + str(headers)]
+    if args.sanitize:
+        common += ['-fsanitize=address,undefined', '-fno-omit-frame-pointer']
     for name, extra in [('settings', [str(source / 'settings.cpp')]), ('network', []), ('maintenance', []), ('display', [str(source / 'settings.cpp')]), ('night', [str(source / 'settings.cpp')]), ('features', [str(source / 'settings.cpp')]), ('update', [])]:
         binary = stage / name
         flags = ['-I' + str(root / 'tests/host/update')] if name == 'update' else []
