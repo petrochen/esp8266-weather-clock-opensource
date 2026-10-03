@@ -139,11 +139,13 @@ logs never contain WiFi or maintenance secrets. Changing network identity reboot
 intervals, display settings and locations apply live. A changed weather location
 cancels the old request and clears its cache.
 
-The update page requires a non-empty file and disables the corresponding submit
-button otherwise. A POST guard registered before the core updater rejects missing
-or zero-byte uploads with HTTP 400. It defers the core upload START until the first
-non-empty chunk; actual firmware/filesystem validation and writing remain in the
-ESP8266 core. The guard must be registered before the stock updater handlers.
+The update page accepts a verified GitHub image or a non-empty local file. A small
+HTTP adapter replaces the unused stock HTML updater and starts the core `Update`
+writer only for the first authenticated non-empty chunk. It retains one byte until
+the full POST is accepted, then finalizes and restarts. Missing/empty/multiple-file
+requests and authentication failures cannot commit an image. Actual image validation
+and flash writing remain in the ESP8266 core. GitHub catalog parsing, downloads and
+SHA-256 run entirely in the browser; see [release updates](UPDATES.md).
 
 The pages share a static gzip bundle generated from `web/` by
 `python3 tools/embed_web.py`. It streams from PROGMEM, includes no external

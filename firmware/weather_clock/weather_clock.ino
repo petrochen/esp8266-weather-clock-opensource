@@ -19,7 +19,6 @@
 
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
-#include <ESP8266HTTPUpdateServer.h>
 #include <ESP8266mDNS.h>
 #include <ArduinoOTA.h>
 #include <WiFiUdp.h>
@@ -47,7 +46,6 @@ WiFiUDP ntpUDP;
 
 // Web server
 ESP8266WebServer server(80);
-ESP8266HTTPUpdateServer httpUpdater;
 
 // State machines — volatile: written from ESPAsyncTCP callbacks, read in main loop
 volatile WeatherState weatherState = WEATHER_IDLE;

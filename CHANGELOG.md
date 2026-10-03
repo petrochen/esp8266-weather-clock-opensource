@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0-beta.2] - Unreleased
+
+- Check Stable or Stable + Beta releases from the Update page and install with
+  the device PIN, without downloading/selecting a file manually.
+- Download and verify target, size and SHA-256 in the browser; retain local-file
+  firmware/filesystem uploads and never persist or send the PIN to GitHub.
+- Add a same-repository release channel publisher with canonical build selection,
+  verified content-addressed images and no channel downgrades.
+- Replace unused stock updater HTML with a compact authenticated HTTP adapter;
+  keep the ESP8266 core writer, defer commit until the full request, and reject
+  interrupted or multiple-file uploads.
+- Keep memory budgets unchanged: 478,416-byte firmware, 38,832-byte static RAM.
+
+See [prepared beta.2 notes](docs/releases/v1.11.0-beta.2.md). Publication and physical
+OTA testing are pending.
+
 ## [1.11.0-beta.1] - 2026-10-03 (pre-release)
 
 - Add optional combined clock/weather, outdoor comfort, hourly rain, two-day

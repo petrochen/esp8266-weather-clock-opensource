@@ -226,7 +226,10 @@ three-power-cycle recovery has a different scope: it clears WiFi only.
 
 `POST /update` takes a multipart file part named `firmware`, or `filesystem` for an
 explicit filesystem image. Missing/zero-byte uploads return 400 before OTA starts.
-The request guard checks authorization before delegating to the ESP8266 core.
+The HTTP handler checks authorization on every chunk and the final POST, permits
+one file per request, and withholds the last byte until the complete request is
+accepted. The ESP8266 core still validates and writes the image. The browser's
+GitHub flow uses this same endpoint; no new device API or GitHub credential is needed.
 **Core image-validation errors can return HTTP 200 with `Update error:` in the
 body.** Success contains `Update Success!` and restarts the clock. The web UI handles
 these cases; do not infer success from HTTP status alone.

@@ -24,6 +24,10 @@ jobs:
           arduino-cli lib install --no-deps 'Adafruit BusIO@1.17.4' 'Adafruit GFX Library@1.12.4' 'Adafruit SSD1306@2.5.16' 'ArduinoJson@7.4.2' 'WiFiManager@2.0.17' 'ESPAsyncTCP@1.2.4' 'AsyncHTTPRequest_Generic@1.13.0'
       - name: Host regressions
         run: python3 tests/run_host_tests.py --arduinojson "$HOME/Arduino/libraries/ArduinoJson/src"
+      - name: Release channel regressions
+        run: |
+          node tests/test_releases.cjs
+          python3 tests/test_update_channel.py
       - name: OLED raster regressions
         run: python3 tests/render_display.py --arduinojson "$HOME/Arduino/libraries/ArduinoJson/src" --gfx "$HOME/Arduino/libraries/Adafruit_GFX_Library" --sanitize
       - name: Check embedded web assets

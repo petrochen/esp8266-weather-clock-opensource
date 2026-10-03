@@ -8,6 +8,7 @@
   if (location.pathname === '/debug') $('diagnostics').open = true;
   let state, receivedAt = 0, polling = false, busy = false, savedSettings, settingsDirty = false;
   let maintenanceAction = '';
+  let selectedRelease = null, releaseChecked = false, checkingRelease = false;
   const settingsForm = $('settings-form');
   const screenNames = ['Time', 'Weather', 'Sunrise / sunset', 'Outdoor comfort', 'Hourly rain', 'Daily forecast', 'Wind', 'External card', 'UV daytime peak'];
   const durationKeys = ['clock', 'weather', 'sun', 'comfort', 'rain', 'daily', 'wind', 'uv'];
@@ -111,6 +112,11 @@
     const weather = state.weather;
     $('device-name').textContent = state.wifi.hostname;
     $('firmware-version').textContent = 'v' + state.system.firmware_version;
+    if (page === 'update' && !releaseChecked) {
+      releaseChecked = true;
+      $('release-channel').value = state.system.firmware_version.includes('-beta.') ? 'beta' : 'stable';
+      checkRelease();
+    }
     if (page !== 'clock') return;
     $('sync-status').textContent = state.time.ntp_synced ? 'Time synchronized' : 'Waiting for time';
     if (!state.time.ntp_synced) {
@@ -334,17 +340,51 @@
   }));
   const pinHeader = input => ({Authorization: 'Bearer ' + input.value.replace('-', '')});
   const validPIN = input => /^[0-9]{3}-?[0-9]{3}$/.test(input.value);
+  const onlineUpdate = () => $('update-source').value === 'github';
+  function validateUpdate() {
+    if (!onlineUpdate()) return validateFile();
+    $('firmware-file').setCustomValidity('');
+    $('upload-button').disabled = !selectedRelease || busy || checkingRelease;
+    return !!selectedRelease && !checkingRelease;
+  }
+  async function checkRelease() {
+    if (busy || checkingRelease) return;
+    selectedRelease = null; checkingRelease = true;
+    $('check-release').disabled = $('release-channel').disabled = true;
+    $('release-notes').hidden = true; validateUpdate();
+    message($('release-result'), 'Checking GitHub…');
+    try {
+      if (!state) throw Error('Connect to the clock before checking for updates.');
+      const item = await releases.check($('release-channel').value);
+      const newer = releases.compare(item.version, state.system.firmware_version) > 0;
+      $('release-notes').href = releases.notes(item); $('release-notes').hidden = false;
+      message($('release-result'), newer ? `v${item.version} available · ${(item.size / 1024).toFixed(1)} KB${item.version.includes('-') ? ' · Beta: experimental firmware' : ''}` : `No newer release. Latest in this channel: v${item.version}.`);
+      if (newer) selectedRelease = item;
+      if (onlineUpdate()) message($('upload-result'), newer ? 'Show the PIN and enter it to install this release.' : 'Your installed version is current or newer.');
+    } catch (error) { message($('release-result'), error instanceof SyntaxError ? 'Invalid GitHub release catalog. Try again later.' : error.message, true); }
+    finally { checkingRelease = false; $('check-release').disabled = $('release-channel').disabled = false; validateUpdate(); }
+  }
+  $('check-release').addEventListener('click', checkRelease);
+  $('release-channel').addEventListener('change', checkRelease);
+  $('update-source').addEventListener('change', () => {
+    const online = onlineUpdate();
+    $('release-options').hidden = !online; $('local-options').hidden = online;
+    $('firmware-file').required = !online;
+    $('upload-button').textContent = online ? 'Install & restart' : 'Upload & restart';
+    message($('upload-result'), online ? 'Choose a release, then enter your PIN.' : 'Select a non-empty file to continue.');
+    validateUpdate();
+  });
   function validateFile() {
     const file = $('firmware-file').files[0];
     const error = !file ? 'Choose a non-empty file to continue.' : !file.size ? 'This file is empty. Choose another file.' : !/\.bin(\.gz)?$/i.test(file.name) ? 'Choose a .bin or .bin.gz file.' : '';
     $('firmware-file').setCustomValidity(error);
-    $('upload-button').disabled = !!error || busy;
+    $('upload-button').disabled = !!error || busy || checkingRelease;
     message($('file-info'), file ? `${file.name} · ${(file.size / 1024).toFixed(1)} KB` : 'No file selected.');
     message($('upload-result'), error || 'Ready when you have entered your PIN.', !!file && !!error);
-    return !error;
+    return !error && !checkingRelease;
   }
   $('firmware-file').addEventListener('change', validateFile);
-  function upload(file, headers) {
+  function upload(file, headers, type) {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', '/update'); xhr.timeout = 180000;
@@ -366,31 +406,39 @@
           reject(new Error(error));
         }
       };
-      const form = new FormData(); form.append($('image-type').value, file);
+      const form = new FormData(); form.append(type, file);
       xhr.send(form);
     });
   }
   $('update-form').addEventListener('submit', async event => {
     event.preventDefault();
-    if (busy || !validateFile() || !validPIN($('update-pin')) || !$('update-form').reportValidity()) return;
+    if (busy || !validateUpdate() || !validPIN($('update-pin')) || !$('update-form').reportValidity()) return;
     const headers = pinHeader($('update-pin'));
-    const file = $('firmware-file').files[0];
+    const item = selectedRelease, online = onlineUpdate();
+    let file = $('firmware-file').files[0];
+    const type = online ? 'firmware' : $('image-type').value;
     busy = true; $('upload-button').disabled = true; $('firmware-file').disabled = true;
+    $('update-source').disabled = $('release-channel').disabled = $('check-release').disabled = true;
     $('image-type').disabled = true; $('update-pin').disabled = true;
     $('update-form').querySelector('[data-show-pin]').disabled = true;
     let success = false;
     try {
       message($('upload-result'), 'Checking PIN…');
       await request('/api/maintenance/verify', {method: 'POST', headers});
+      if (online) {
+        message($('upload-result'), 'Downloading from GitHub and checking SHA-256… Keep this page open.');
+        file = await releases.download(item);
+      }
       $('upload-progress').hidden = false; $('upload-progress').value = 0;
-      await upload(file, headers); success = true;
+      await upload(file, headers, type); success = true;
       message($('upload-result'), 'Update complete. The clock is restarting. Return to Clock in a few seconds.');
     } catch (error) { message($('upload-result'), error.message, true); }
     finally {
       busy = false; $('update-pin').value = ''; $('update-pin').disabled = false;
       $('firmware-file').disabled = false; $('image-type').disabled = false;
+      $('update-source').disabled = $('release-channel').disabled = $('check-release').disabled = success;
       $('update-form').querySelector('[data-show-pin]').disabled = false;
-      $('upload-button').disabled = success; // Prevent accidental duplicate submission.
+      $('upload-button').disabled = success || (online && !selectedRelease); // Prevent accidental duplicate submission.
     }
   });
   addEventListener('beforeunload', event => { if (busy || settingsDirty) { event.preventDefault(); event.returnValue = ''; } });

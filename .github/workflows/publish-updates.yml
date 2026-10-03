@@ -1,0 +1,55 @@
+name: Publish browser update channel
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag to mirror (v1.11.0-beta.2)
+        required: true
+        type: string
+permissions:
+  contents: write
+concurrency:
+  group: firmware-update-channel
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Verify publisher
+        run: python3 tests/test_update_channel.py
+      - name: Prepare isolated channel checkout
+        shell: bash
+        run: |
+          set +e
+          git ls-remote --exit-code origin refs/heads/codex/firmware-updates > /dev/null
+          result=$?
+          set -e
+          if [ "$result" = 0 ]; then
+            git fetch origin refs/heads/codex/firmware-updates
+            git worktree add --detach "$RUNNER_TEMP/update-channel" FETCH_HEAD
+          elif [ "$result" = 2 ]; then
+            git worktree add --detach "$RUNNER_TEMP/update-channel" HEAD
+            git -C "$RUNNER_TEMP/update-channel" checkout --orphan codex/firmware-updates
+            git -C "$RUNNER_TEMP/update-channel" rm -rfq .
+          else
+            exit "$result"
+          fi
+      - name: Validate release and stage browser downloads
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: python3 tools/prepare_update_channel.py --tag "$RELEASE_TAG" --output "$RUNNER_TEMP/update-channel"
+      - name: Publish verified channel
+        run: |
+          cd "$RUNNER_TEMP/update-channel"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add channels.json firmware/
+          if ! git diff --cached --quiet; then
+            git commit -m 'Publish verified firmware update channel'
+            git push origin HEAD:refs/heads/codex/firmware-updates
+          fi

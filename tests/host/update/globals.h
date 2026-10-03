@@ -10,6 +10,7 @@ struct HTTPUpload {
   HTTPUploadStatus status = UPLOAD_FILE_START;
   String filename, name;
   size_t currentSize = 0;
+  uint8_t buf[1024] = {};
 };
 class ESP8266WebServer;
 class RequestHandlerMock {
@@ -34,17 +35,20 @@ public:
   std::vector<std::string> registration;
   RequestHandlerType* registeredGuard=nullptr;
   bool authenticate(const char* user,const char* password){return authenticated && String(user)=="admin" && suppliedPassword==password;}
-  void send(int status,const char*,const char* text){code=status;body=text;}
+  void send(int status,const char*,const String& text){code=status;body=text;}
+  struct Client { void setNoDelay(bool){} void stop(){} } clientInstance;
+  Client& client(){return clientInstance;}
   void send_P(int status,const char* type,const char* text){send(status,type,text);}
   void on(const char*,HTTPMethod,std::function<void()> handler){get=handler;registration.push_back("page");}
   void addHandler(RequestHandlerType* handler){registeredGuard=handler;registration.push_back("guard");}
 } inline server;
-struct UpdaterMock {
-  String username,password;
-  int credentialUpdates=0;
-  void setup(ESP8266WebServer* web,const char*,const char* user="",const char* pass=""){username=user;password=pass;web->registration.push_back("core");}
-  void updateCredentials(const char* user,const char* pass){username=user;password=pass;++credentialUpdates;}
-} inline httpUpdater;
+struct ESPMock {
+  size_t freeSketchSpace = 0x3000;
+  int restarts = 0;
+  size_t getFreeSketchSpace(){return freeSketchSpace;}
+  void restart(){++restarts;}
+} inline ESP;
+inline void delay(unsigned long){}
 inline const char* maintenancePassword(){return "123456";}
 inline const char* authenticatedMaintenancePassword(){
   for(const char* spelling:{"123456","123-456"})if(server.authenticate("admin",spelling))return spelling;

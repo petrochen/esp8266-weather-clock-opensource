@@ -1,5 +1,28 @@
 # Build, validation and upgrade notes
 
+## 1.11.0-beta.2 local validation
+
+Prepared on 2026-10-03; not yet published or flashed. The pinned isolated Linux
+build passed with **478,416 bytes** (816 bytes below the same OTA limit), **38,832
+bytes static RAM** and **62,007 / 65,536 instruction bytes including cache**.
+The embedded web page is 58,803 bytes before gzip and 18,060 bytes in flash.
+Firmware is 208 bytes smaller than beta.1 despite the added browser updater.
+
+Passed: all host regressions; the new HTTP update harness with ASan/UBSan;
+browser SHA-256 comparisons against Node crypto through 479,232 bytes; semantic
+version/catalog checks; publication validation, including rebuilt releases;
+the actual minified UI in Chromium at desktop and 320/390-pixel widths; insecure
+HTTP hashing, PIN-before-download, corrupt/oversized downloads, local fallback and
+credential isolation. An actual browser successfully fetched a public raw GitHub
+file from an insecure HTTP origin. Both existing public release images were
+staged locally and matched their metadata and SHA-256 digests.
+
+Embedded-asset reproducibility, script syntax, workflow YAML parsing and diff
+whitespace checks passed. The new publication workflow has not run on GitHub;
+its integration requires default-branch installation and channel publication.
+No physical OTA/reboot/power-loss test was performed. OLED drawing and provisioning
+were not changed; their dedicated raster/portal suites were not repeated for beta.2.
+
 ## 1.11.0-beta.1 pre-release validation
 
 Local checks completed on 2026-10-03 using the pinned toolchain below:
@@ -117,10 +140,11 @@ real upload timing or actual hardware. The browser/core HTTP updater retains its
 existing progress behavior; the labeled OLED percent screen belongs to ArduinoOTA.
 
 The update handler rejects missing or zero-byte files before starting OTA.
-Firmware/filesystem delegation, aborted uploads, per-request state and guard
-registration order are tested with a substituted core updater. The guard, which
-runs before the core, authenticates each chunk and the final POST. The core retains
-image validation/writing; it does not provide a second authentication layer.
+From beta.2, firmware/filesystem byte streams, writer errors, interrupted full-size
+images, multiple-file rejection, per-request state and commit timing are tested with
+a substituted core writer. The HTTP adapter authenticates each chunk and the final
+POST. The core retains image validation/writing; it does not provide a second
+authentication layer. See [update-channel checks](UPDATES.md#checks).
 
 `python3 tests/test_web.py` executes the actual UI in Chromium against a simulated
 API: settings round-trip, empty file, wrong-PIN preflight, successful upload,

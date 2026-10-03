@@ -6,6 +6,7 @@ import argparse
 from copy import deepcopy
 import json
 import gzip
+import hashlib
 from pathlib import Path
 import re
 from playwright.sync_api import sync_playwright
@@ -40,13 +41,31 @@ pins = []
 api_status = deepcopy(status)
 upload_error = False
 config_error = False
+firmware = b'\xe9\x02\x02\x20' + (bytes(range(256)) * 1870)[:478380]
+firmware_digest = hashlib.sha256(firmware).hexdigest()
+catalog = dict(schema=1, target='esp01s-1m64-dio-80',
+               stable=dict(version='1.11.0', size=len(firmware), sha256=firmware_digest),
+               beta=dict(version='1.12.0-beta.2', size=len(firmware), sha256=firmware_digest))
+github_error = 0
+download_bytes = firmware
+github_requests = []
 
 def route_request(route):
     request = route.request
     path = request.url.removeprefix('http://clock.test')
     calls.append((request.method, path))
     headers = request.headers
-    if request.url.startswith('https://geocoding-api.open-meteo.com/'):
+    if request.url.startswith('https://raw.githubusercontent.com/'):
+        assert 'authorization' not in headers and 'cookie' not in headers
+        github_requests.append(request.url)
+        if github_error:
+            route.fulfill(status=github_error, body='Unavailable')
+        elif request.url.endswith('/channels.json'):
+            route.fulfill(json=catalog)
+        else:
+            assert request.url.endswith('/firmware/' + firmware_digest + '.bin')
+            route.fulfill(content_type='application/octet-stream', body=download_bytes)
+    elif request.url.startswith('https://geocoding-api.open-meteo.com/'):
         route.fulfill(json={'results': [dict(name='Portimão', latitude=37.14, longitude=-8.53, country='Portugal')]})
     elif path in ('/', '/config', '/debug', '/update') and request.method == 'GET':
         route.fulfill(status=200, content_type='text/html', body=html)
@@ -81,6 +100,8 @@ def route_request(route):
             route.fulfill(status=401, json={'error': 'Incorrect PIN. Read the six digits on your clock.'})
         elif path == '/update':
             assert b'name="firmware"' in request.post_data_buffer
+            if b'filename="weather_clock-' in request.post_data_buffer:
+                assert firmware in request.post_data_buffer
             route.fulfill(body='Update error: ERROR[10]: Invalid image' if upload_error else 'Update Success! Rebooting...')
         else:
             route.fulfill(json={'status': 'ok'})
@@ -250,6 +271,59 @@ with sync_playwright() as p:
     assert ('POST', '/api/eeprom-clear') not in calls
 
     open_page('/update')
+    page.locator('#release-result').filter(has_text='1.12.0-beta.2 available').wait_for()
+    assert not page.evaluate('isSecureContext')
+    assert page.locator('#release-channel').input_value() == 'beta'
+    assert page.locator('#firmware-file').is_hidden()
+    screenshot('update-github-desktop')
+    for width in [320, 390]:
+        page.set_viewport_size({'width':width, 'height':844})
+        no_overflow()
+        assert page.locator('#upload-button').is_visible()
+    screenshot('update-github-mobile')
+    page.set_viewport_size({'width':1280, 'height':800})
+    page.locator('#release-channel').select_option('stable')
+    page.locator('#release-result').filter(has_text='v1.11.0 available').wait_for()
+    assert 'beta' not in page.locator('#release-notes').get_attribute('href')
+    before = len(github_requests)
+    page.locator('#update-pin').fill('999999');page.locator('#upload-button').click()
+    page.locator('#upload-result').filter(has_text='Incorrect PIN').wait_for()
+    assert len(github_requests) == before # no image download until PIN validation
+    assert ('POST', '/update') not in calls
+    download_bytes = firmware[:-1] + b'X'
+    page.locator('#update-pin').fill('123456');page.locator('#upload-button').click()
+    page.locator('#upload-result').filter(has_text='checksum mismatch').wait_for()
+    assert ('POST', '/update') not in calls and page.locator('#update-pin').input_value() == ''
+    download_bytes = firmware + b'X'
+    page.locator('#update-pin').fill('123456');page.locator('#upload-button').click()
+    page.locator('#upload-result').filter(has_text='oversized file').wait_for()
+    assert ('POST', '/update') not in calls
+    download_bytes = firmware
+    # A leftover manual filesystem choice must never affect an online install.
+    page.locator('#image-type').evaluate("el => el.value='filesystem'")
+    page.locator('#update-pin').fill('123-456');page.locator('#upload-button').click()
+    page.locator('#upload-result').filter(has_text='Update complete').wait_for()
+    assert page.locator('#upload-button').is_disabled() and page.locator('#update-pin').input_value() == ''
+    assert calls.count(('POST', '/update')) == 1
+    calls.remove(('POST', '/update')) # subsequent manual-upload guards retain their own assertions
+    open_page('/update')
+    page.locator('#release-result').filter(has_text='available').wait_for()
+    catalog['beta']['version'] = version
+    catalog['stable']['version'] = '1.10.0'
+    page.locator('#check-release').click()
+    page.locator('#release-result').filter(has_text='No newer release').wait_for()
+    assert page.locator('#upload-button').is_disabled()
+    catalog['target'] = 'esp32'
+    page.locator('#check-release').click()
+    page.locator('#release-result').filter(has_text='incompatible').wait_for()
+    assert page.locator('#upload-button').is_disabled()
+    catalog['target'] = 'esp01s-1m64-dio-80'
+    github_error = 404
+    page.locator('#check-release').click()
+    page.locator('#release-result').filter(has_text='unavailable (404)').wait_for()
+    assert page.locator('#upload-button').is_disabled()
+    github_error = 0
+    page.locator('#update-source').select_option('file')
     assert page.locator('#upload-button').is_disabled()
     page.locator('#firmware-file').set_input_files({'name': 'empty.bin', 'mimeType': 'application/octet-stream', 'buffer': b''})
     assert page.locator('#upload-button').is_disabled()

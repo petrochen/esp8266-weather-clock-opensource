@@ -150,16 +150,30 @@ backup for another device. JSON import is available through the
 The normal update is one `.bin` file. The web interface is bundled into the firmware,
 so there is no separate web/filesystem upload to perform.
 
-1. Open **Update** (`/update`) and choose the firmware file for this clock.
+1. Open **Update** (`/update`). From 1.11.0-beta.2, **GitHub release** checks for a
+   newer **Stable** or **Stable + Beta** version. The initial channel follows your
+   installed version; changing it does not install anything. Read the release
+   notes, or select **Local file** to use a downloaded image.
 2. Press **Show PIN on clock**. Read the six digits on the physical OLED.
-3. Enter the PIN, with or without the grouping dash, and press **Upload & restart**.
+3. Enter the PIN, with or without the grouping dash, and press **Install & restart**
+   (or **Upload & restart** for a local file).
 4. Keep power connected and wait for the result. A successful update restarts the
    clock; return to the Clock page after it reconnects and check the version in
    the header beside the hostname.
 
 There is no username field. Missing/empty files cannot start an update; the browser
-checks the PIN before sending the firmware. The advanced **Filesystem** option is
+checks the PIN before downloading/sending the firmware. GitHub downloads are checked
+for the target, size and SHA-256 before any firmware bytes reach the clock. Keep the
+browser page open until completion. Checks occur on opening Update, changing the
+channel or pressing **Check GitHub**; there are no unattended background installs.
+An older/equal version is never offered automatically. Downgrades and reinstalling
+the same version require a deliberate local-file upload.
+
+The advanced **Filesystem** option is
 for a deliberately supplied filesystem image, not the normal release binary.
+The device's PIN is sent only to the clock and is not stored in the browser.
+GitHub being unavailable does not prevent local-file updates. The online catalog
+must first be published by the repository maintainer; see [release updates](UPDATES.md).
 
 The current installed firmware handles the first upload. When upgrading an older
 version, use that version's existing login or code; the PIN-only interface appears

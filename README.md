@@ -136,6 +136,12 @@ readability, not a startup benchmark. [Still image](images/wifi-demo-poster.png)
 
 **Already running this firmware?** Open `/update`, choose the clock's `.bin`, press **Show PIN on clock**, enter the six digits, then choose **Upload & restart**. The current installed version handles that first upload, so an older version can still require its existing login/code. The new page appears after the update.
 
+From **1.11.0-beta.2**, that page can also check the project's **Stable** or
+**Stable + Beta** channel and install with your PIN. Your browser downloads and
+checks the image; the little ESP does not have to talk HTTPS to GitHub. The
+maintainer must publish the [update channel](docs/UPDATES.md) first. Local-file
+updates remain available.
+
 The normal update needs **one firmware file**. The web interface is inside it; leave the advanced Filesystem option alone unless you have a separate filesystem image for a specific reason.
 
 Settings live at `/config`. Display, location, intervals and night mode apply when saved; changes to WiFi credentials, hostname or NTP server restart the clock. See the [user guide](docs/USAGE.md) for schedules, PINs, recovery and settings backup.
