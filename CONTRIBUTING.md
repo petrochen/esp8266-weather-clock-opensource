@@ -161,7 +161,14 @@ The HTTP reset clears all settings; a full flash erase also removes them. See th
 3. Package the verified `.bin` with `tools/package_firmware.py`, an accurate revision
    identifier, `SHA256SUMS` and build information. For uncommitted sources use a
    `local-<source-digest>` identifier; do not label them as the base Git commit.
-4. Review upgrade instructions and remaining hardware checks before publishing.
+4. Attach only the canonical `.bin`, `SHA256SUMS` and `BUILD_INFO.txt` to the
+   release. Keep checksums limited to the files actually attached (excluding the
+   checksum file itself). GitHub supplies source archives automatically.
+5. Put the changelog in the release description using `Added`, `Changed` and
+   `Fixed` where applicable. Keep documentation, GIFs, screenshots and render
+   galleries in the repository and link to a fixed commit; do not duplicate them
+   as release attachments. Keep the release tag on the exact firmware source commit.
+6. Review upgrade instructions and remaining hardware checks before publishing.
    GitHub Actions attaches successful build artifacts; it does not publish releases.
 
 A prepared release is not a published release. The firmware and source revision

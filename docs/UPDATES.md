@@ -46,8 +46,10 @@ source branches do not contain those binaries.
    publication. Beta firmware can stay on its release branch. The workflow always
    runs the publisher from the trusted default branch, not from a release-provided script.
 2. Publish a GitHub release/prerelease with its `.bin`, `SHA256SUMS` and
-   `BUILD_INFO.txt`, produced by the pinned build pipeline. Upload all assets
-   before publishing the draft. Keep the tag and `Firmware:` version consistent.
+   `BUILD_INFO.txt`, produced by the pinned build pipeline. These are the only
+   release attachments needed; keep documentation and previews in the repository.
+   Upload all three files before publishing the draft. Keep the tag and `Firmware:`
+   version consistent, and list only current attachments in `SHA256SUMS` (not itself).
 3. The **Publish browser update channel** workflow verifies the release and
    publishes the appropriate catalog entry. Stable and beta remain separate;
    publishing an older version cannot move either channel backwards.

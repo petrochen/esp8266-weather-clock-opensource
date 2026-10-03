@@ -7,27 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.11.0-beta.2] - 2026-10-03 (pre-release)
 
-- Check Stable or Stable + Beta releases from the Update page and install with
-  the device PIN, without downloading/selecting a file manually.
-- Download and verify target, size and SHA-256 in the browser; retain local-file
-  firmware/filesystem uploads and never persist or send the PIN to GitHub.
-- Add a same-repository release channel publisher with canonical build selection,
-  verified content-addressed images and no channel downgrades.
-- Replace unused stock updater HTML with a compact authenticated HTTP adapter;
-  keep the ESP8266 core writer, defer commit until the full request, and reject
-  interrupted or multiple-file uploads.
-- Verify non-restarting settings saves by reading values back; retain edits and
-  show an error if the clock returns different values or cannot be reached.
-- Clarify that presets replace individual screen choices, mark manual adjustments
-  as Custom, and explain disabled screen options on the Clock page.
-- Share the JSON reader across HTTP handlers, avoid repeated weather conversions
-  and sun-label formatting, and store the weather URL format in flash.
-- Add pinned ESLint/Ruff checks, EditorConfig/clang-format guidance and optional
-  ASan/UBSan across all host suites, enabled in CI.
-- Keep memory budgets unchanged: 476,496-byte firmware, 38,464-byte static RAM.
+### Added
 
-See [beta.2 release notes](docs/releases/v1.11.0-beta.2.md). Physical OTA testing
-and long-running hardware validation remain pending.
+- GitHub release checks for Stable and Stable + Beta, with PIN-confirmed
+  installation from the Update page and browser-side target, size and SHA-256 checks.
+- A same-repository publisher for verified update catalogs and firmware images,
+  with canonical build selection and protection against channel downgrades.
+- Pinned ESLint/Ruff checks, EditorConfig/clang-format guidance and ASan/UBSan
+  across all seven host suites in CI.
+
+### Changed
+
+- Replace the unused stock updater page with a compact HTTP adapter using the
+  ESP8266 core writer. Manual firmware/filesystem uploads remain available;
+  the PIN stays on the local device connection and is never sent to GitHub.
+- Clarify screen presets, rename Time & weather to Combined clock + UV, mark
+  manual screen choices as Custom, and explain unavailable Clock-page options.
+- Share the HTTP JSON reader, avoid repeated weather conversions and sun-label
+  formatting, and store the weather URL format in flash. The firmware is
+  2,176 bytes smaller and static RAM is 368 bytes lower than the preceding local
+  beta.2 build; memory budgets remain unchanged.
+- Keep release downloads to the firmware, SHA256SUMS and BUILD_INFO.txt.
+  Release notes, screenshots and the complete OLED gallery live in the repository.
+
+### Fixed
+
+- Show Saved only after non-restarting settings changes have been read back
+  and verified; preserve edits for retry if values differ or verification fails.
+- Prevent firmware finalization for incomplete or multiple-file upload requests;
+  commit only after the complete authenticated request has been received.
+
+Verified build: 476,496-byte firmware and 38,464-byte static RAM. Settings and
+maintenance PIN storage remain compatible. See [beta.2 release notes](docs/releases/v1.11.0-beta.2.md).
+Physical OTA testing and long-running hardware validation remain pending.
 
 ## [1.11.0-beta.1] - 2026-10-03 (pre-release)
 

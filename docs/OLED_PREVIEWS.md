@@ -34,9 +34,11 @@ The prepared beta adds 29 scenarios for combined time/weather, outdoor comfort,
 rain, daily min/max/UV, wind units/direction, moon, sun countdown, external cards
 and dimming, including eight UV scenarios (all levels, absent/stale data). Together with the 51 existing
 cases, **80 scenarios × 4 orientations = 320 actual GFX renders** are checked.
-The beta package contains `OLED_GALLERY.html` and a ZIP with native PNGs, metrics
-and an offline index. These show the final beta state; the historical 1.10
-before/after gallery below remains unchanged.
+For beta.2, [download the self-contained gallery](previews/v1.11.0-beta.2-oled.html?raw=1)
+and open it in a browser. It includes all 320 native PNGs, with search, orientation
+and zoom controls, and works offline. The gallery is documentation in the repository;
+only the firmware and its verification files are attached to the release.
+The historical 1.10 before/after gallery below remains unchanged.
 
 [![Selected beta OLED screens](../images/beta-oled-preview.png)](../images/beta-oled-preview.png)
 
