@@ -29,7 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   check the installed version; report uncertainty instead of automatically retrying.
 - Allow selecting stable even when its version number is below the installed beta.
 
-See [beta.4 notes](docs/releases/v1.11.0-beta.4.md). Hardware OTA/rollback tests pending.
+See [beta.4 notes](docs/releases/v1.11.0-beta.4.md). A physical browser-only
+beta.2 → beta.4 → beta.3 → beta.4 trial passed with 30 compared settings retained.
+Older Stable rollback, power-loss recovery and long-running tests remain pending.
 
 ## [1.11.0-beta.3] - 2026-10-03 (pre-release)
 

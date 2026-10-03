@@ -31,11 +31,33 @@ four-release history is 1,788 bytes). This validates source/catalog compatibilit
 not a physical downgrade or device update. Local history staging did not publish
 anything to GitHub.
 
-No hardware was flashed, rebooted or reset. Physical OTA, downgrade/return,
+At the local-build stage, no hardware was flashed, rebooted or reset. Physical OTA, downgrade/return,
 EEPROM preservation across installed versions, power-loss recovery and a 24-hour
-soak remain pending. GitHub CI/publication and live CDN refresh after publishing
-this history were not run. OLED and provisioning code were unchanged; their
+soak remain pending. GitHub CI/publication and live CDN refresh had not yet run at that stage;
+subsequent publication and hardware results are recorded below. OLED and provisioning code were unchanged; their
 separate raster/portal suites were not repeated.
+
+### Published build and physical trial
+
+The canonical beta.4 release is built from `7bf1adc60ea1474cc225e1638f2daf4e0ed229d5`.
+[GitHub Actions 37146110583](https://github.com/petrochen/esp8266-weather-clock-opensource/actions/runs/37146110583)
+passed all checks, including browser/setup-portal regressions and 320 OLED renders.
+Its three release assets include the 477,664-byte BIN with SHA-256
+`1f181f53380c07fcaf319a7cf49c9f3b06a251a62969c0817b013d666358bd51`.
+History bootstrap and automatic beta.4 publication succeeded; legacy Stable
+remained 1.10.0, old tags were preserved and the new history lists five releases.
+
+On 2026-10-03, a physical ESP-01S completed **beta.2 → beta.4 → beta.3 → beta.4**
+using the clock's actual GitHub/PIN web interface, without manual BIN uploads.
+The beta.4 page displayed the rollback consequences and confirmed beta.3 after
+restart; beta.3 then offered beta.4 through the preserved legacy catalog. All
+**30 compared display, screen, unit and night settings** matched after each step.
+The same maintenance PIN worked throughout. The clock was left on beta.4.
+
+This checks one device and this specific route. Older Stable rollback, power-loss
+recovery and long-running hardware testing remain unverified. Live GitHub CDN
+caching briefly delayed discovery immediately after publication; the normal
+Check GitHub button eventually found beta.4 without a workaround.
 
 ## 1.11.0-beta.2 local validation
 
