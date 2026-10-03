@@ -14,19 +14,34 @@ const releases = (() => {
     for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] > b[i] ? 1 : -1;
     return 0;
   }
-  function select(manifest, channel) {
-    if (!manifest || manifest.schema !== 1 || manifest.target !== target) throw Error('The release catalog is incompatible with this clock.');
-    const candidates = [manifest.stable, ...(channel === 'beta' ? [manifest.beta] : [])].filter(Boolean);
-    for (const item of candidates) {
-      version(item.version);
-      if (typeof item.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(item.sha256) || !Number.isInteger(item.size) || item.size < 8 || item.size > 479232 ||
-          (item === manifest.stable && item.version.includes('-'))) throw Error('Invalid release information. Use a local file.');
+  function catalog(manifest) {
+    if (!manifest || manifest.schema !== 2 || manifest.target !== target || !Array.isArray(manifest.releases) || !manifest.recommended || typeof manifest.published !== 'string' || !Number.isFinite(Date.parse(manifest.published))) throw Error('The release catalog is incompatible with this clock.');
+    const seen = new Set();
+    for (const item of manifest.releases) {
+      version(item?.version);
+      if (seen.has(item.version) || typeof item.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(item.sha256) || !Number.isInteger(item.size) || item.size < 8 || item.size > 479232 || typeof item.published !== 'string' || !Number.isFinite(Date.parse(item.published)) || !/^[a-f0-9]{12}$/.test(item.revision) ||
+          !['available', 'withdrawn'].includes(item.status) || !item.profile || typeof item.profile.storage !== 'string' || ['github', 'forecast', 'version_picker'].some(key => typeof item.profile[key] !== 'boolean')) throw Error('Invalid release information. Use a local file.');
+      seen.add(item.version);
     }
-    if (!candidates.length) throw Error('No release is available in this channel yet.');
-    return candidates.sort((a, b) => compare(b.version, a.version))[0];
+    for (const [channel, v] of Object.entries(manifest.recommended)) {
+      const item = manifest.releases.find(r => r.version === v);
+      if (!['stable', 'beta'].includes(channel) || typeof v !== 'string' || (channel === 'stable') === v.includes('-') || !item || item.status !== 'available') throw Error('Invalid recommended release.');
+    }
+    return manifest;
+  }
+  function transition(item, installed) {
+    const order = compare(item.version, installed);
+    const action = order < 0 ? 'Downgrade' : order === 0 ? 'Reinstall' : 'Update';
+    const allowed = item.status === 'available' && item.profile.storage === 'eeprom-v1';
+    let note = item.status === 'withdrawn' ? 'Withdrawn: ' + (item.reason || 'This build is unavailable.') : !allowed ? 'Settings compatibility is unknown. Installation unavailable.' : 'Basic settings and PIN are retained.';
+    if (allowed && !item.profile.github) note += ' GitHub updates will be unavailable. To return, upload a firmware BIN manually.';
+    if (allowed && item.profile.github && !item.profile.version_picker) note += ' Version selection and rollback will be unavailable; latest-release updates remain.';
+    if (allowed && !item.profile.forecast) note += ' UV and additional beta screens will be unavailable.';
+    if (allowed && item.version.includes('-')) note += ' Beta: experimental firmware.';
+    return {action, allowed, note, confirm: allowed && (order <= 0 || !item.profile.github || !item.profile.forecast)};
   }
   async function read(path, limit) {
-    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), limit <= 4096 ? 12000 : 60000);
+    const controller = new AbortController(), timer = setTimeout(() => controller.abort(), path.startsWith('firmware/') ? 60000 : 12000);
     try {
       const response = await fetch(base + path, {signal: controller.signal, cache: 'no-store', credentials: 'omit', referrerPolicy: 'no-referrer'});
       if (!response.ok) throw Error(`GitHub download unavailable (${response.status}). Try again or use a local file.`);
@@ -77,7 +92,7 @@ const releases = (() => {
     if (bytes[0] !== 0xe9 || bytes[2] !== 2 || bytes[3] !== 0x20) throw Error('Firmware does not match the ESP-01S target. Update stopped.');
     return new File([bytes], `weather_clock-v${item.version}.bin`, {type: 'application/octet-stream'});
   }
-  return {compare, select, sha256, download,
+  return {compare, catalog, transition, sha256, download,
     notes: item => `https://github.com/${repo}/releases/tag/v${item.version}`,
-    check: async channel => select(JSON.parse(new TextDecoder().decode(await read('channels.json', 4096))), channel)};
+    check: async () => catalog(JSON.parse(new TextDecoder().decode(await read('releases.json?t=' + Date.now(), 32768))))};
 })();

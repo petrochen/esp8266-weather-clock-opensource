@@ -1,5 +1,42 @@
 # Build, validation and upgrade notes
 
+## 1.11.0-beta.4 local validation
+
+Local checks completed on 2026-10-03. The pinned isolated Linux build produced
+**477,664 bytes**, leaving **1,568 bytes** below the unchanged OTA limit. Static
+RAM remains **38,464 bytes** and instruction memory plus cache remains
+**62,007 / 65,536 bytes**. The embedded page is **63,816 bytes** before gzip,
+**19,503 bytes** in flash. No HTTP/TLS/catalog buffers were added to the ESP.
+The compiled firmware snapshot was compared byte-for-byte with the source files.
+
+Passed: all seven host executables with ASan/UBSan; ESLint and Ruff; embedded
+asset reproducibility; browser SHA-256 through the maximum image size; release
+ordering, malformed catalog/recommendation rejection and transition metadata;
+five publisher regressions for channel separation, history-only imports,
+idempotence, immutable/withdrawn releases and invalid metadata/images.
+
+The actual minified embedded UI passed Chromium tests at desktop and 320/390 px:
+All/Stable/Beta filters, explicit reinstall/downgrade confirmation, warnings about
+GitHub/UV/version-picker loss, unknown storage and withdrawn builds, PIN before
+firmware download, checksum/size rejection and local-file fallback. Post-upload
+simulations cover temporary disconnects, a confirmed reboot, no reboot,
+same-version reinstalls and a reboot into the wrong version. PINs were cleared
+and absent from browser storage and GitHub requests. Screenshots were inspected.
+
+The four actual published images (1.10.0 and beta.1–3) were independently staged
+using their GitHub metadata, BUILD_INFO and checksums. Production beta.4 browser
+code accepted the history and verified every image hash. Unmodified beta.2 and
+beta.3 JavaScript accepted the generated legacy catalog (347 bytes; the separate
+four-release history is 1,788 bytes). This validates source/catalog compatibility,
+not a physical downgrade or device update. Local history staging did not publish
+anything to GitHub.
+
+No hardware was flashed, rebooted or reset. Physical OTA, downgrade/return,
+EEPROM preservation across installed versions, power-loss recovery and a 24-hour
+soak remain pending. GitHub CI/publication and live CDN refresh after publishing
+this history were not run. OLED and provisioning code were unchanged; their
+separate raster/portal suites were not repeated.
+
 ## 1.11.0-beta.2 local validation
 
 Local checks completed on 2026-10-03; no hardware flash was performed. The pinned isolated Linux

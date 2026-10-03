@@ -8,7 +8,7 @@
   if (location.pathname === '/debug') $('diagnostics').open = true;
   let state, receivedAt = 0, polling = false, busy = false, savedSettings, settingsDirty = false;
   let maintenanceAction = '';
-  let selectedRelease = null, releaseChecked = false, checkingRelease = false;
+  let releaseCatalog, selectedRelease = null, releaseChecked = false, checkingRelease = false;
   const settingsForm = $('settings-form');
   const screenNames = ['Time', 'Weather', 'Sunrise / sunset', 'Outdoor comfort', 'Hourly rain', 'Daily forecast', 'Wind', 'External card', 'UV daytime peak'];
   const durationKeys = ['clock', 'weather', 'sun', 'comfort', 'rain', 'daily', 'wind', 'uv'];
@@ -23,9 +23,9 @@
     element.textContent = text;
     element.classList.toggle('error', error);
   }
-  async function request(path, options = {}) {
+  async function request(path, options = {}, timeoutMs = 12000) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(path, {...options, signal: controller.signal, cache: 'no-store'});
       const text = await response.text();
@@ -114,7 +114,7 @@
     $('firmware-version').textContent = 'v' + state.system.firmware_version;
     if (page === 'update' && !releaseChecked) {
       releaseChecked = true;
-      $('release-channel').value = state.system.firmware_version.includes('-beta.') ? 'beta' : 'stable';
+      $('release-channel').value = state.system.firmware_version.includes('-beta.') ? 'all' : 'stable';
       checkRelease();
     }
     if (page !== 'clock') return;
@@ -355,33 +355,71 @@
   function validateUpdate() {
     if (!onlineUpdate()) return validateFile();
     $('firmware-file').setCustomValidity('');
-    $('upload-button').disabled = !selectedRelease || busy || checkingRelease;
-    return !!selectedRelease && !checkingRelease;
+    const ready = selectedRelease && (!$('release-confirm').required || $('release-confirm').checked);
+    $('upload-button').disabled = !ready || busy || checkingRelease;
+    return !!ready && !checkingRelease;
+  }
+  function chooseRelease() {
+    const item = releaseCatalog?.releases.find(r => r.version === $('release-version').value);
+    selectedRelease = null;
+    $('release-confirm').checked = false; $('release-confirm').required = false;
+    $('release-confirm-row').hidden = true; $('release-notes').hidden = !item;
+    message($('release-impact'), '');
+    if (item) {
+      const change = releases.transition(item, state.system.firmware_version);
+      if (change.allowed) selectedRelease = item;
+      $('release-notes').href = releases.notes(item);
+      message($('release-result'), `${change.action} · v${item.version} · ${item.published.slice(0, 10)} · ${(item.size / 1024).toFixed(1)} KB`);
+      message($('release-impact'), change.note, !change.allowed || change.confirm);
+      $('release-confirm-row').hidden = !change.confirm; $('release-confirm').required = change.confirm;
+      $('upload-button').textContent = `Install v${item.version}`;
+    } else {
+      message($('release-result'), 'No releases in this filter.');
+      $('upload-button').textContent = 'Install & restart';
+    }
+    validateUpdate();
+  }
+  function filterReleases() {
+    const channel = $('release-channel').value, select = $('release-version');
+    select.replaceChildren();
+    const items = (releaseCatalog?.releases || []).filter(r => channel === 'all' || r.version.includes('-') === (channel === 'beta')).sort((a, b) => releases.compare(b.version, a.version));
+    const recommended = Object.values(releaseCatalog?.recommended || {});
+    for (const item of items) {
+      const option = document.createElement('option'); option.value = item.version;
+      const allowed = releases.transition(item, state.system.firmware_version).allowed;
+      option.textContent = `v${item.version}${item.version === state.system.firmware_version ? ' · Current' : ''}${recommended.includes(item.version) ? ' · Recommended' : ''}${allowed ? '' : ' · Unavailable'}`;
+      select.append(option);
+    }
+    select.disabled = !items.length;
+    select.value = (items.find(r => recommended.includes(r.version) && releases.transition(r, state.system.firmware_version).allowed) || items[0])?.version || '';
+    chooseRelease();
   }
   async function checkRelease() {
     if (busy || checkingRelease) return;
-    selectedRelease = null; checkingRelease = true;
-    $('check-release').disabled = $('release-channel').disabled = true;
-    $('release-notes').hidden = true; validateUpdate();
+    selectedRelease = null; releaseCatalog = null; checkingRelease = true;
+    $('check-release').disabled = $('release-channel').disabled = $('release-version').disabled = true;
+    $('release-confirm').required = false; $('release-confirm-row').hidden = true;
+    $('release-version').replaceChildren(); $('release-notes').hidden = true;
+    message($('release-impact'), ''); message($('catalog-date'), ''); validateUpdate();
     message($('release-result'), 'Checking GitHub…');
     try {
       if (!state) throw Error('Connect to the clock before checking for updates.');
-      const item = await releases.check($('release-channel').value);
-      const newer = releases.compare(item.version, state.system.firmware_version) > 0;
-      $('release-notes').href = releases.notes(item); $('release-notes').hidden = false;
-      message($('release-result'), newer ? `v${item.version} available · ${(item.size / 1024).toFixed(1)} KB${item.version.includes('-') ? ' · Beta: experimental firmware' : ''}` : `No newer release. Latest in this channel: v${item.version}.`);
-      if (newer) selectedRelease = item;
-      if (onlineUpdate()) message($('upload-result'), newer ? 'Show the PIN and enter it to install this release.' : 'Your installed version is current or newer.');
+      releaseCatalog = await releases.check();
+      message($('catalog-date'), ' · Catalog: ' + releaseCatalog.published.replace('T', ' '));
+      filterReleases();
     } catch (error) { message($('release-result'), error instanceof SyntaxError ? 'Invalid GitHub release catalog. Try again later.' : error.message, true); }
     finally { checkingRelease = false; $('check-release').disabled = $('release-channel').disabled = false; validateUpdate(); }
   }
   $('check-release').addEventListener('click', checkRelease);
-  $('release-channel').addEventListener('change', checkRelease);
+  $('release-channel').addEventListener('change', filterReleases);
+  $('release-version').addEventListener('change', chooseRelease);
+  $('release-confirm').addEventListener('change', validateUpdate);
   $('update-source').addEventListener('change', () => {
     const online = onlineUpdate();
     $('release-options').hidden = !online; $('local-options').hidden = online;
     $('firmware-file').required = !online;
-    $('upload-button').textContent = online ? 'Install & restart' : 'Upload & restart';
+    $('release-confirm').required = online && !$('release-confirm-row').hidden;
+    $('upload-button').textContent = online && selectedRelease ? `Install v${selectedRelease.version}` : 'Upload & restart';
     message($('upload-result'), online ? 'Choose a release, then enter your PIN.' : 'Select a non-empty file to continue.');
     validateUpdate();
   });
@@ -429,10 +467,10 @@
     let file = $('firmware-file').files[0];
     const type = online ? 'firmware' : $('image-type').value;
     busy = true; $('upload-button').disabled = true; $('firmware-file').disabled = true;
-    $('update-source').disabled = $('release-channel').disabled = $('check-release').disabled = true;
+    $('update-source').disabled = $('release-channel').disabled = $('release-version').disabled = $('check-release').disabled = $('release-confirm').disabled = true;
     $('image-type').disabled = true; $('update-pin').disabled = true;
     $('update-form').querySelector('[data-show-pin]').disabled = true;
-    let success = false;
+    let accepted = false;
     try {
       message($('upload-result'), 'Checking PIN…');
       await request('/api/maintenance/verify', {method: 'POST', headers});
@@ -441,15 +479,32 @@
         file = await releases.download(item);
       }
       $('upload-progress').hidden = false; $('upload-progress').value = 0;
-      await upload(file, headers, type); success = true;
-      message($('upload-result'), 'Update complete. The clock is restarting. Return to Clock in a few seconds.');
+      // Fresh uptime is essential for same-version reinstalls, including a page
+      // left open for hours. A successful upload alone does not prove reboot.
+      const before = await request('/api/status'), started = performance.now();
+      await upload(file, headers, type); accepted = true;
+      $('update-pin').value = '';
+      message($('upload-result'), 'Upload accepted. Waiting for restart and checking the installed version…');
+      let observed;
+      for (let attempt = 0; attempt < 20; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, attempt < 5 ? 2000 : 3000));
+        try { observed = await request('/api/status', {}, 3000); } catch { continue; }
+        const system = observed?.system;
+        const restarted = system && Number.isFinite(system.uptime) && Number.isFinite(before?.system?.uptime) && system.uptime + 2 < before.system.uptime + (performance.now() - started) / 1000;
+        if (restarted && typeof system.firmware_version === 'string' && (!online || system.firmware_version === item.version)) {
+          $('firmware-version').textContent = 'v' + system.firmware_version;
+          message($('upload-result'), `Update complete. Clock restarted with v${system.firmware_version}.${online ? '' : ' Local file version was not verified against a release.'} Reload the page before another update.`);
+          return;
+        }
+      }
+      throw Error('Upload accepted, but restart/version could not be confirmed.' + (observed?.system?.firmware_version ? ' Last seen: v' + observed.system.firmware_version + '.' : '') + ' Check the clock before retrying.');
     } catch (error) { message($('upload-result'), error.message, true); }
     finally {
       busy = false; $('update-pin').value = ''; $('update-pin').disabled = false;
       $('firmware-file').disabled = false; $('image-type').disabled = false;
-      $('update-source').disabled = $('release-channel').disabled = $('check-release').disabled = success;
+      $('update-source').disabled = $('release-channel').disabled = $('release-version').disabled = $('check-release').disabled = $('release-confirm').disabled = accepted;
       $('update-form').querySelector('[data-show-pin]').disabled = false;
-      $('upload-button').disabled = success || (online && !selectedRelease); // Prevent accidental duplicate submission.
+      $('upload-button').disabled = accepted || (online && !selectedRelease); // Prevent accidental duplicate submission.
     }
   });
   addEventListener('beforeunload', event => { if (busy || settingsDirty) { event.preventDefault(); event.returnValue = ''; } });

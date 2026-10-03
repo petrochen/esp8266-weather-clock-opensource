@@ -10,6 +10,7 @@ import hashlib
 from pathlib import Path
 import re
 import struct
+from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright
 
 root = Path(__file__).resolve().parents[1]
@@ -48,14 +49,22 @@ config_restart = False
 config_round_coordinates = False
 firmware = b'\xe9\x02\x02\x20' + (bytes(range(256)) * 1870)[:478380]
 firmware_digest = hashlib.sha256(firmware).hexdigest()
-catalog = dict(schema=1, target='esp01s-1m64-dio-80',
-               stable=dict(version='1.11.0', size=len(firmware), sha256=firmware_digest),
-               beta=dict(version='1.12.0-beta.2', size=len(firmware), sha256=firmware_digest))
+def release_item(version, github=True, forecast=True, **fields):
+    return dict(version=version, size=len(firmware), sha256=firmware_digest, published='2026-10-03T12:00:00Z', revision='0123456789ab',
+                status='available', profile=dict(storage='eeprom-v1', github=github, forecast=forecast, version_picker=version not in ['1.10.0','1.11.0-beta.1','1.11.0-beta.2','1.11.0-beta.3']), **fields)
+
+catalog = dict(schema=2, target='esp01s-1m64-dio-80', published='2026-10-03T12:00:00Z',
+               recommended=dict(stable='1.11.0', beta='1.12.0-beta.2'),
+               releases=[release_item('1.11.0'), release_item('1.12.0-beta.2'), release_item(version), release_item('1.11.0-beta.3'),
+                         release_item('1.11.0-beta.1', github=False), release_item('1.10.0', github=False, forecast=False)])
+reboot_mode = 'ok'
+reboot_status_reads = 0
 github_error = 0
 download_bytes = firmware
 github_requests = []
 
 def route_request(route):
+    global reboot_status_reads
     request = route.request
     path = request.url.removeprefix('http://clock.test')
     calls.append((request.method, path))
@@ -65,7 +74,7 @@ def route_request(route):
         github_requests.append(request.url)
         if github_error:
             route.fulfill(status=github_error, body='Unavailable')
-        elif request.url.endswith('/channels.json'):
+        elif urlsplit(request.url).path.endswith('/releases.json'):
             route.fulfill(json=catalog)
         else:
             assert request.url.endswith('/firmware/' + firmware_digest + '.bin')
@@ -75,7 +84,11 @@ def route_request(route):
     elif path in ('/', '/config', '/debug', '/update') and request.method == 'GET':
         route.fulfill(status=200, content_type='text/html', body=html)
     elif path == '/api/status':
-        route.fulfill(json=api_status)
+        if reboot_status_reads:
+            reboot_status_reads -= 1
+            route.abort()
+        else:
+            route.fulfill(json=api_status)
     elif path == '/api/debug':
         route.fulfill(json=dict(ntp_attempts=4, ntp_successes=4, gateway='192.168.2.1', dns='192.168.2.1', last_error=''))
     elif path == '/api/i2c-scan':
@@ -113,6 +126,12 @@ def route_request(route):
             assert b'name="firmware"' in request.post_data_buffer
             if b'filename="weather_clock-' in request.post_data_buffer:
                 assert firmware in request.post_data_buffer
+            if not upload_error:
+                match = re.search(rb'filename="weather_clock-v([^"/]+)\.bin"', request.post_data_buffer)
+                if reboot_mode != 'no-reboot':
+                    api_status['system']['uptime'] = 1
+                    if match and reboot_mode != 'wrong-version': api_status['system']['firmware_version'] = match[1].decode()
+                    reboot_status_reads = 1
             route.fulfill(body='Update error: ERROR[10]: Invalid image' if upload_error else 'Update Success! Rebooting...')
         else:
             route.fulfill(json={'status': 'ok'})
@@ -282,9 +301,9 @@ with sync_playwright() as p:
     assert ('POST', '/api/eeprom-clear') not in calls
 
     open_page('/update')
-    page.locator('#release-result').filter(has_text='1.12.0-beta.2 available').wait_for()
+    page.locator('#release-result').filter(has_text='Update · v1.12.0-beta.2').wait_for()
     assert not page.evaluate('isSecureContext')
-    assert page.locator('#release-channel').input_value() == 'beta'
+    assert page.locator('#release-channel').input_value() == 'all'
     assert page.locator('#firmware-file').is_hidden()
     screenshot('update-github-desktop')
     for width in [320, 390]:
@@ -294,7 +313,7 @@ with sync_playwright() as p:
     screenshot('update-github-mobile')
     page.set_viewport_size({'width':1280, 'height':800})
     page.locator('#release-channel').select_option('stable')
-    page.locator('#release-result').filter(has_text='v1.11.0 available').wait_for()
+    page.locator('#release-result').filter(has_text='Update · v1.11.0').wait_for()
     assert 'beta' not in page.locator('#release-notes').get_attribute('href')
     before = len(github_requests)
     page.locator('#update-pin').fill('999999');page.locator('#upload-button').click()
@@ -317,13 +336,42 @@ with sync_playwright() as p:
     assert page.locator('#upload-button').is_disabled() and page.locator('#update-pin').input_value() == ''
     assert calls.count(('POST', '/update')) == 1
     calls.remove(('POST', '/update')) # subsequent manual-upload guards retain their own assertions
+    api_status['system'] = deepcopy(status['system'])
     open_page('/update')
-    page.locator('#release-result').filter(has_text='available').wait_for()
-    catalog['beta']['version'] = version
-    catalog['stable']['version'] = '1.10.0'
-    page.locator('#check-release').click()
-    page.locator('#release-result').filter(has_text='No newer release').wait_for()
+    page.locator('#release-version').select_option(version)
+    page.locator('#release-result').filter(has_text='Reinstall').wait_for()
     assert page.locator('#upload-button').is_disabled()
+    page.locator('#release-confirm').check()
+    assert page.locator('#upload-button').is_enabled()
+    page.locator('#release-channel').select_option('beta')
+    assert all('beta' in o for o in page.locator('#release-version option').all_text_contents())
+    page.locator('#release-version').select_option('1.11.0-beta.3')
+    assert 'latest-release updates remain' in page.locator('#release-impact').inner_text()
+    page.locator('#release-version').select_option('1.11.0-beta.1')
+    assert 'GitHub updates will be unavailable' in page.locator('#release-impact').inner_text()
+    assert 'UV' not in page.locator('#release-impact').inner_text()
+    assert not page.locator('#release-confirm').is_checked()
+    page.locator('#release-channel').select_option('stable')
+    page.locator('#release-version').select_option('1.10.0')
+    assert 'Downgrade' in page.locator('#release-result').inner_text()
+    assert 'UV' in page.locator('#release-impact').inner_text()
+    assert 'manually' in page.locator('#release-impact').inner_text()
+    screenshot('update-downgrade-desktop')
+    page.locator('#release-confirm').check()
+    assert page.locator('#upload-button').is_enabled()
+    # Unknown settings / withdrawn builds stay visible but cannot be installed.
+    catalog['releases'][-1]['profile']['storage'] = 'unknown'
+    page.locator('#check-release').click()
+    page.locator('#release-version').select_option('1.10.0')
+    assert 'compatibility is unknown' in page.locator('#release-impact').inner_text()
+    assert page.locator('#upload-button').is_disabled()
+    catalog['releases'][-1]['profile']['storage'] = 'eeprom-v1'
+    catalog['releases'][-1]['status'] = 'withdrawn'
+    page.locator('#check-release').click()
+    page.locator('#release-version').select_option('1.10.0')
+    assert 'Withdrawn' in page.locator('#release-impact').inner_text()
+    assert page.locator('#upload-button').is_disabled()
+    catalog['releases'][-1]['status'] = 'available'
     catalog['target'] = 'esp32'
     page.locator('#check-release').click()
     page.locator('#release-result').filter(has_text='incompatible').wait_for()
@@ -362,6 +410,19 @@ with sync_playwright() as p:
     assert page.evaluate('localStorage.length + sessionStorage.length') == 0
     assert not any('123456' in url or '123-456' in url for _, url in calls)
     assert context.cookies() == []
+    # Same-version reinstall must not succeed merely because the version matches.
+    for mode in ['no-reboot', 'wrong-version', 'ok']:
+        api_status['system'] = deepcopy(status['system'])
+        reboot_mode = mode
+        open_page('/update')
+        page.locator('#release-version').select_option(version if mode != 'wrong-version' else '1.12.0-beta.2')
+        if mode != 'wrong-version': page.locator('#release-confirm').check()
+        page.evaluate('window.setTimeout = ((native) => (fn, ms, ...args) => native(fn, ms === 2000 || ms === 3000 ? 5 : ms, ...args))(window.setTimeout)')
+        page.locator('#update-pin').fill('123456'); page.locator('#upload-button').click()
+        page.locator('#upload-result').filter(has_text='Update complete' if mode == 'ok' else 'could not be confirmed').wait_for()
+        assert page.locator('#upload-button').is_disabled()
+        assert page.locator('#update-pin').input_value() == ''
+    reboot_mode = 'ok'
     # New controls use explicit API actions and keep the weather's canonical units.
     api_status.update(deepcopy(status))
     open_page('/')

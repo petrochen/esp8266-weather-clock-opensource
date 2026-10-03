@@ -168,7 +168,11 @@ The HTTP reset clears all settings; a full flash erase also removes them. See th
    `Fixed` where applicable. Keep documentation, GIFs, screenshots and render
    galleries in the repository and link to a fixed commit; do not duplicate them
    as release attachments. Keep the release tag on the exact firmware source commit.
-6. Review upgrade instructions and remaining hardware checks before publishing.
+6. For GitHub browser updates, audit the release's storage/capabilities in
+   `tools/update_profiles.json` and install the updated publisher/profile/tests on
+   the default branch before publication. Keep the legacy catalog under 4 KB;
+   history has its own 32 KB budget. See [catalog publication](docs/UPDATES.md).
+7. Review upgrade instructions and remaining hardware checks before publishing.
    GitHub Actions attaches successful build artifacts; it does not publish releases.
 
 A prepared release is not a published release. The firmware and source revision

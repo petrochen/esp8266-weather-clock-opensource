@@ -40,7 +40,7 @@ class UpdateChannelTests(unittest.TestCase):
             self.assertEqual((self.output/'channels.json').read_bytes(), before)
 
     def test_image_and_asset_validation(self):
-        release, sums = self.release('1.12.0')
+        release, sums = self.release('1.11.0-beta.4')
         for image in [b'', self.image[:-1], self.image[:-1]+b'X', b'\xe9\x02\x00\x20'+self.image[4:], self.image*700]:
             with self.assertRaises(ValueError): channel.prepare(release, sums, image, self.output)
             self.assertFalse((self.output/'channels.json').exists())
@@ -49,6 +49,41 @@ class UpdateChannelTests(unittest.TestCase):
             with self.assertRaises(ValueError): channel.prepare(bad, sums, self.image, self.output)
         for bad_sums in ['', sums+sums, sums.replace(self.digest, 'broken')]:
             with self.assertRaises(ValueError): channel.prepare(release, bad_sums, self.image, self.output)
+
+    def test_history_preserves_channels_and_is_idempotent(self):
+        for version in ['1.10.0', '1.11.0-beta.3']:
+            channel.prepare(*self.release(version), self.image, self.output)
+        before = (self.output/'channels.json').read_bytes()
+        channel.prepare(*self.release('1.11.0-beta.1'), self.image, self.output, history_only=True)
+        self.assertEqual((self.output/'channels.json').read_bytes(), before)
+        self.assertLessEqual(len(before), 4096)
+        history = json.loads((self.output/'releases.json').read_text())
+        self.assertEqual([r['version'] for r in history['releases']], ['1.11.0-beta.3', '1.11.0-beta.1', '1.10.0'])
+        self.assertEqual(history['recommended'], {'stable':'1.10.0', 'beta':'1.11.0-beta.3'})
+        self.assertFalse(history['releases'][1]['profile']['github'])
+        snapshot = {p.name:p.read_bytes() for p in self.output.glob('*.json')}
+        channel.prepare(*self.release('1.11.0-beta.1'), self.image, self.output, history_only=True)
+        self.assertEqual(snapshot, {p.name:p.read_bytes() for p in self.output.glob('*.json')})
+        with self.assertRaises(ValueError):
+            channel.prepare(*self.release('1.12.0'), self.image, self.output)
+        with self.assertRaises(ValueError):
+            channel.prepare(*self.release('1.11.0-beta.2'), self.image[:-1], self.output, history_only=True)
+        self.assertEqual(snapshot, {p.name:p.read_bytes() for p in self.output.glob('*.json')})
+
+    def test_immutable_and_withdrawn_release(self):
+        channel.prepare(*self.release('1.11.0-beta.3'), self.image, self.output)
+        path = self.output/'releases.json'
+        history = json.loads(path.read_text())
+        history['releases'][0]['status'] = 'withdrawn'
+        history['releases'][0]['reason'] = 'Test withdrawal'
+        path.write_text(json.dumps(history))
+        with self.assertRaises(ValueError):
+            channel.prepare(*self.release('1.11.0-beta.3'), self.image, self.output)
+        history['releases'][0]['status'] = 'available'
+        history['releases'][0]['sha256'] = 'f'*64
+        path.write_text(json.dumps(history))
+        with self.assertRaises(ValueError):
+            channel.prepare(*self.release('1.11.0-beta.3'), self.image, self.output)
 
     def test_rebuilt_release_uses_build_info(self):
         release, sums = self.release('1.10.0')

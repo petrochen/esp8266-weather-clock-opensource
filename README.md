@@ -137,7 +137,9 @@ readability, not a startup benchmark. [Still image](images/wifi-demo-poster.png)
 **Already running this firmware?** Open `/update`, choose the clock's `.bin`, press **Show PIN on clock**, enter the six digits, then choose **Upload & restart**. The current installed version handles that first upload, so an older version can still require its existing login/code. The new page appears after the update.
 
 From **1.11.0-beta.2**, that page can also check the project's **Stable** or
-**Stable + Beta** channel and install with your PIN. Your browser downloads and
+**Stable + Beta** channel and install with your PIN. The prepared
+[beta.4](docs/releases/v1.11.0-beta.4.md) adds explicit version selection,
+reinstallation and downgrade warnings; see [update compatibility](docs/UPDATES.md). Your browser downloads and
 checks the image; the little ESP does not have to talk HTTPS to GitHub. The
 [update channel](docs/UPDATES.md) supplies verified images for both choices.
 Local-file updates remain available.

@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0-beta.4] - Unreleased
+
+### Added
+
+- Choose a published version with All / Stable / Beta filters, including a
+  same-version reinstall or an explicit downgrade with PIN confirmation.
+- Show transition consequences: loss of GitHub updates, manual BIN recovery,
+  UV/extra screens and audited settings compatibility. Unknown storage profiles
+  and withdrawn releases cannot be installed from the catalog.
+- Add a bounded release history, audited capability profiles and history-only
+  publication without moving the legacy latest-channel pointers backwards.
+
+### Changed
+
+- Keep schema-1 `channels.json` small and compatible with beta.2/3; publish the
+  new history and verified images in the same commit. No extra release attachments.
+- Refresh uses a unique catalog request and displays its publication timestamp.
+
+### Fixed
+
+- Stop treating a successful upload as a completed update: wait for reboot and
+  check the installed version; report uncertainty instead of automatically retrying.
+- Allow selecting stable even when its version number is below the installed beta.
+
+See [beta.4 notes](docs/releases/v1.11.0-beta.4.md). Hardware OTA/rollback tests pending.
+
 ## [1.11.0-beta.3] - 2026-10-03 (pre-release)
 
 ### Changed
