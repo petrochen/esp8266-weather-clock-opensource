@@ -89,5 +89,6 @@ compatibility. The browser suite, release hashing/catalog tests, linters and
 embedded-asset reproducibility also passed. See [validation](VALIDATION.md) for
 the current sanitizer and hardware status.
 
-The updated CI workflow has not run on GitHub. No firmware was flashed, and no
+At the time of this local audit, the updated CI workflow had not run on GitHub.
+No firmware was flashed, and no
 claim about reduced on-device loop latency or runtime heap has been measured.

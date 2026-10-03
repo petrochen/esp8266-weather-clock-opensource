@@ -41,9 +41,10 @@ URLs support browser access. No proxy, GitHub Pages site or additional service i
 needed. The branch holds `channels.json` and `firmware/<sha256>.bin` files; ordinary
 source branches do not contain those binaries.
 
-1. Merge the implementation and `.github/workflows/publish-updates.yml` into the
-   default branch before enabling publication. The workflow always runs the
-   publisher from that trusted branch, not from a release-provided script.
+1. Install `.github/workflows/publish-updates.yml`, `tools/prepare_update_channel.py`
+   and `tests/test_update_channel.py` on the default branch before enabling
+   publication. Beta firmware can stay on its release branch. The workflow always
+   runs the publisher from the trusted default branch, not from a release-provided script.
 2. Publish a GitHub release/prerelease with its `.bin`, `SHA256SUMS` and
    `BUILD_INFO.txt`, produced by the pinned build pipeline. Upload all assets
    before publishing the draft. Keep the tag and `Firmware:` version consistent.

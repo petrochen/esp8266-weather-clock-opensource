@@ -22,7 +22,7 @@ I bought a cute weather clock kit from AliExpress ([TJ-56-654](https://pt.aliexp
 *An early look at the 1.11 beta, rendered by the firmware with sample data.
 [Still image](images/clock-demo-poster.png) · [All screens](docs/OLED_PREVIEWS.md).*
 
-**Want to use it?** Start with the [installation guide](docs/INSTALLATION.md), grab a published binary from [Releases](https://github.com/petrochen/esp8266-weather-clock-opensource/releases), or read [what's new in 1.10.0](docs/releases/v1.10.0.md). The last published stable release is **1.10.0**. Try **[1.11.0-beta.1](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.0-beta.1)** as a pre-release. This source tree prepares **[1.11.0-beta.2](docs/releases/v1.11.0-beta.2.md)**; its notes separate completed checks from publication and hardware testing still to do.
+**Want to use it?** Start with the [installation guide](docs/INSTALLATION.md), grab a published binary from [Releases](https://github.com/petrochen/esp8266-weather-clock-opensource/releases), or read [what's new in 1.10.0](docs/releases/v1.10.0.md). The last published stable release is **1.10.0**. Try **[1.11.0-beta.2](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.0-beta.2)** as a pre-release; its [notes](docs/releases/v1.11.0-beta.2.md) separate completed checks from hardware testing still to do.
 
 **Here for the story?** Read on.
 
@@ -139,8 +139,8 @@ readability, not a startup benchmark. [Still image](images/wifi-demo-poster.png)
 From **1.11.0-beta.2**, that page can also check the project's **Stable** or
 **Stable + Beta** channel and install with your PIN. Your browser downloads and
 checks the image; the little ESP does not have to talk HTTPS to GitHub. The
-maintainer must publish the [update channel](docs/UPDATES.md) first. Local-file
-updates remain available.
+[update channel](docs/UPDATES.md) supplies verified images for both choices.
+Local-file updates remain available.
 
 The normal update needs **one firmware file**. The web interface is inside it; leave the advanced Filesystem option alone unless you have a separate filesystem image for a specific reason.
 

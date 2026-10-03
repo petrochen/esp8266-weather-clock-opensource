@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.11.0-beta.2] - Unreleased
+## [1.11.0-beta.2] - 2026-10-03 (pre-release)
 
 - Check Stable or Stable + Beta releases from the Update page and install with
   the device PIN, without downloading/selecting a file manually.
@@ -26,8 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ASan/UBSan across all host suites, enabled in CI.
 - Keep memory budgets unchanged: 476,496-byte firmware, 38,464-byte static RAM.
 
-See [prepared beta.2 notes](docs/releases/v1.11.0-beta.2.md). Publication and physical
-OTA testing are pending.
+See [beta.2 release notes](docs/releases/v1.11.0-beta.2.md). Physical OTA testing
+and long-running hardware validation remain pending.
 
 ## [1.11.0-beta.1] - 2026-10-03 (pre-release)
 

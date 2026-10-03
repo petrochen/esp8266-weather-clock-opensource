@@ -2,7 +2,7 @@
 
 ## 1.11.0-beta.2 local validation
 
-Prepared on 2026-10-03; not yet published or flashed. The pinned isolated Linux
+Local checks completed on 2026-10-03; no hardware flash was performed. The pinned isolated Linux
 build passed with **476,496 bytes** (2,736 bytes below the same OTA limit), **38,464
 bytes static RAM** and **62,007 / 65,536 instruction bytes including cache**.
 The embedded web page is 59,549 bytes before gzip and 18,340 bytes in flash.
@@ -34,8 +34,8 @@ release hashing/catalog tests passed again. The duplicate String-reader parser
 is absent from the final ELF; API limits and EEPROM layouts are unchanged.
 
 Embedded-asset reproducibility, script syntax, workflow YAML parsing and diff
-whitespace checks passed. The new publication workflow has not run on GitHub;
-its integration requires default-branch installation and channel publication.
+whitespace checks passed. See the [GitHub Actions history](https://github.com/petrochen/esp8266-weather-clock-opensource/actions)
+for the release commit's build and channel-publication results, separate from these local checks.
 No physical OTA/reboot/power-loss test was performed. OLED drawing and provisioning
 were not changed; their dedicated raster/portal suites were not repeated for beta.2.
 
