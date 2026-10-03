@@ -98,6 +98,8 @@ void processWiFiConnection();
 // Display functions (display.cpp)
 void ICACHE_FLASH_ATTR clearDisplay();
 void ICACHE_FLASH_ATTR showNumber(int num, bool leadingZeros);
+void ICACHE_FLASH_ATTR showUpdateProgress(int percent);
+void ICACHE_FLASH_ATTR showSetupScreen(bool afterReset);
 void ICACHE_FLASH_ATTR showNoWiFi(unsigned long nextRetrySeconds);
 void ICACHE_FLASH_ATTR showStartupAnimation();
 void ICACHE_FLASH_ATTR showWiFiConnecting(int step);

@@ -61,10 +61,11 @@
           <section class="settings-section" aria-labelledby="weather-title">
             <h2 id="weather-title">Weather</h2>
             <div class="form-row"><span id="weather-enable-label">Fetch weather</span><label class="check"><input type="checkbox" name="weather_enabled" aria-labelledby="weather-enable-label weather-provider"><span id="weather-provider">Open-Meteo</span></label></div>
-            <div class="form-row"><label for="city">City label</label><input id="city" name="city_name" maxlength="31" autocomplete="address-level2"></div>
+            <div class="form-row"><label for="city">City label</label><input id="city" name="city_name" maxlength="31" autocomplete="address-level2" aria-describedby="city-help"></div>
             <div class="form-row"><label for="latitude">Latitude</label><input id="latitude" type="number" name="latitude" min="-90" max="90" step="any" required></div>
             <div class="form-row"><label for="longitude">Longitude</label><input id="longitude" type="number" name="longitude" min="-180" max="180" step="any" required></div>
             <div class="form-row"><label for="weather-interval">Refresh interval</label><div class="input-unit"><input id="weather-interval" type="number" name="weather_interval" min="60" max="86400" required><span>sec</span></div></div>
+            <p class="help" id="city-help">City label: <span id="city-bytes">0</span>/31 UTF-8 bytes. Long labels wrap on the OLED.</p>
           </section>
           <section class="settings-section" aria-labelledby="network-title">
             <h2 id="network-title">Connection</h2>

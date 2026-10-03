@@ -15,6 +15,12 @@ struct DisplayMock {
   void setTextSize(int){}
   void setTextColor(int){}
   void setCursor(int,int){}
+  void setTextWrap(bool){}
+  void cp437(bool){}
+  void fillRect(int,int,int,int,int){}
+  int width(){return rotation % 2 ? 64 : 128;}
+  int height(){return rotation % 2 ? 128 : 64;}
+  size_t write(uint8_t value){text+=char(value);return 1;}
   const uint8_t* bitmap=nullptr;
   int bitmapX=0,bitmapY=0,bitmapWidth=0,bitmapHeight=0;
   void drawBitmap(int x,int y,const uint8_t* bits,int w,int h,int){
@@ -25,6 +31,7 @@ struct DisplayMock {
   void print(const char* value){text+=value;}
   void print(const String& value){text+=value;}
   void print(int value){text+=std::to_string(value);}
+  void print(char value){text+=value;}
   template<class T>void println(T value){print(value);text+='\n';}
   template<class...T>void printf(const char* format,T...values){
     char formatted[128];snprintf(formatted,sizeof(formatted),format,values...);text+=formatted;
@@ -85,6 +92,16 @@ int main(){
   // Text capture checks rendering dispatch; it does not emulate font pixels/I2C.
   fakeMillis=1000;showStartupAnimation();
   assert(fakeMillis==1000); // startup logo must not delay WiFi/NTP setup
+  const uint8_t* connectionFrames[3];
+  for(int step=0;step<3;++step){
+    showWiFiConnecting(step);connectionFrames[step]=display.bitmap;
+    assert(display.lastText.find("Wi-Fi")!=std::string::npos);
+    assert(display.lastText.find("Connecting")!=std::string::npos);
+    assert(display.lastText.find("...")==std::string::npos && display.lastText.find('*')==std::string::npos);
+    assert(fakeMillis==1000); // caller owns timing; drawing never adds a wait
+  }
+  assert(connectionFrames[0]!=connectionFrames[1] && connectionFrames[1]!=connectionFrames[2]);
+  showWiFiConnecting(3);assert(display.bitmap==connectionFrames[0]);
   config.brightness=0;applyDisplaySettings();
   assert(display.commands.back()>=32);
   showWiFiConnecting(0);showConnected();

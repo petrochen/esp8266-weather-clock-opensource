@@ -152,19 +152,7 @@ void ICACHE_FLASH_ATTR checkFactoryReset() {
     EEPROM.end();
 
     // Show reset screen
-    display.clearDisplay();
-    display.setTextColor(SSD1306_WHITE);
-    display.setTextSize(2);
-    display.setCursor(8, 4);
-    display.println("FACTORY");
-    display.setCursor(8, 24);
-    display.println("RESET!");
-    display.setTextSize(1);
-    display.setCursor(2, 48);
-    display.println("WiFi: TJ56654-Setup");
-    display.setCursor(2, 57);
-    display.println("Pass: 12345678");
-    display.display();
+    showSetupScreen(true);
 
     delay(4000);
     ESP.restart();
@@ -222,18 +210,18 @@ void ICACHE_FLASH_ATTR setupOTA() {
     String type = (ArduinoOTA.getCommand() == U_FLASH) ? "sketch" : "filesystem";
     Serial.println("Start OTA updating " + type);
     clearDisplay();
-    showNumber(0, false);
+    showUpdateProgress(0);
   });
 
   ArduinoOTA.onEnd([]() {
     Serial.println("\nOTA Update complete!");
-    showNumber(100, false);
+    showUpdateProgress(100);
   });
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    int percent = (progress / (total / 100));
+    int percent = total ? (uint64_t(progress) * 100 / total) : 0;
     Serial.printf("Progress: %u%%\r", percent);
-    showNumber(percent, false);
+    showUpdateProgress(percent);
   });
 
   ArduinoOTA.onError([](ota_error_t error) {

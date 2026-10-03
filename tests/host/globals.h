@@ -20,7 +20,14 @@ struct IPAddress {
  bool operator==(const IPAddress& other) const {return value == other.value;}
 };
 constexpr int WL_CONNECTED = 3;
-struct WiFiMock { int connected = WL_CONNECTED; int status(){return connected;} String SSID(){return "test";} IPAddress localIP(){return IPAddress();} } inline WiFi;
+struct WiFiMock {
+ int connected = WL_CONNECTED;
+ String ssid = "test";
+ IPAddress ip;
+ int status(){return connected;}
+ String SSID(){return ssid;}
+ IPAddress localIP(){return ip;}
+} inline WiFi;
 struct ESPMock {
  uint32_t nextValue=0;
  int randomCalls=0;

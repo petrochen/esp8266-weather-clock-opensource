@@ -180,6 +180,19 @@ with sync_playwright() as p:
     assert page.locator('#brightness-value').inner_text() == '4 / 7'
     assert page.locator('#save-settings').is_disabled() and not updates
     # Native validation still blocks an incomplete required setting.
+    city = page.get_by_label('City label', exact=True)
+    city.fill('АБВГДЕЖЗИЙКЛМНОП')  # 16 characters, 32 UTF-8 bytes
+    assert page.locator('#city-bytes').inner_text() == '32'
+    page.locator('#save-settings').click()
+    assert not updates and page.locator('#city:invalid').count() == 1
+    city.fill('Санкт-Петербург')
+    assert page.locator('#city-bytes').inner_text() == '29'
+    assert page.locator('#city:invalid').count() == 0
+    city.fill('W' * 31)
+    assert page.locator('#city-bytes').inner_text() == '31'
+    assert page.locator('#city:invalid').count() == 0
+    page.locator('#discard-settings').click()
+    assert page.locator('#city:invalid').count() == 0
     page.get_by_label('NTP server', exact=True).fill('')
     page.locator('#save-settings').click()
     assert not updates and page.locator('#ntp-server:invalid').count() == 1

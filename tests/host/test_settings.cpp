@@ -28,6 +28,16 @@ int main() {
   assert(apply(c, "{\"ssid\":\"AAAA\",\"timezone_offset\":50400,\"dst_enabled\":false,\"display_orientation\":3}"));
   assert(c.timezone_offset == 50400 && !c.dst_enabled && c.display_orientation == 3);
   assert(apply(c, "{\"city_name\":\"a\\\"b\\\\c\"}"));
+  // The legacy city field holds 31 UTF-8 bytes, not 31 Unicode characters.
+  const std::string city31(31, 'W');
+  assert(apply(c, ("{\"city_name\":\"" + city31 + "\"}").c_str()));
+  for (size_t length : {32U, 55U}) {
+    assert(!apply(c, ("{\"ssid\":\"changed\",\"city_name\":\"" + std::string(length, 'W') + "\"}").c_str()));
+    assert(!strcmp(c.city_name, city31.c_str()) && !strcmp(c.ssid, "AAAA"));
+  }
+  assert(apply(c, "{\"city_name\":\"Санкт-Петербург\"}"));
+  assert(!apply(c, "{\"city_name\":\"АБВГДЕЖЗИЙКЛМНОП\"}")); // 16 letters = 32 bytes
+  assert(!strcmp(c.city_name, "Санкт-Петербург"));
   JsonDocument exported;
   exportSettings(c, exported);
   assert(exported["password"].isUnbound());

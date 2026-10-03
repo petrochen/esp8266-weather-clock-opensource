@@ -456,7 +456,8 @@ three times, cutting power before each of the first two runs reaches ten seconds
 2. Power on again, then off within ten seconds.
 3. Power on a third time and leave it running.
 
-The third boot shows `FACTORY RESET!` and clears both saved and SDK WiFi credentials.
+The third boot shows `WiFi reset` (`FACTORY RESET!` in the first v1.10.0 build and older versions)
+and clears both saved and SDK WiFi credentials.
 Despite that screen label, **other settings and the maintenance PIN are retained**.
 Connect to **TJ56654-Setup**, password `12345678`, and configure WiFi through the
 portal at `http://192.168.4.1/`.

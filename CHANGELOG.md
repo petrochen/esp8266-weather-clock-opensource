@@ -12,6 +12,28 @@ network recovery fixes. This entry includes the local 1.9.11–1.9.13 developmen
 builds; they were not separate published releases. The previous public release is
 1.9.10. See the [release notes](docs/releases/v1.10.0.md) for upgrade instructions.
 
+### OLED revision in the same release
+
+Refreshed on 2026-10-03, superseding the first `5ae2387ac626` build while retaining
+the v1.10.0 release number. The release gallery includes all 408 before/after renders.
+
+- Fit OLED text to the actual orientation: prevent automatic wrapping in headings,
+  clipped long city/SSID names, and the stray last letter in `No Data`. Long city
+  labels wrap within their footer; short-word breaks never discard a long remainder.
+- Decode UTF-8 before drawing city/SSID labels; add compact Russian glyphs and
+  Portuguese tildes, reuse native Latin-1 glyphs, and correct the degree sign.
+- Validate the existing 31-byte city limit in the browser, with a UTF-8 byte counter.
+  The settings API and EEPROM layout are unchanged; 55-character names remain invalid.
+- Replace ambiguous connecting dots/stars with a native Wi-Fi wave animation and
+  an explicit `Connecting` label, reusing the existing connection timing.
+- Replace standalone sunrise/sunset arrows with native 16×16 sun/horizon symbols
+  and small direction cues (64 bytes in flash).
+- Center clock/status content, mark 12-hour time with AM/PM, label ArduinoOTA
+  progress with `%`, and rename physical WiFi recovery to `WiFi reset`.
+- Add reproducible OLED previews using the real Adafruit_GFX rasterizer: 204
+  screen/orientation combinations, clipping checks, UTF-8 and name-length cases,
+  optional sanitizers, and a generated gallery. Run these checks in CI.
+
 ### Added
 
 - Optional OLED night schedule using synchronized local time, including windows

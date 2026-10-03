@@ -29,6 +29,8 @@ arduino-cli compile \
   --fqbn esp8266:esp8266:generic:eesz=1M64,FlashMode=dio,xtal=80 \
   --warnings all --build-path build firmware/weather_clock
 python3 tests/run_host_tests.py --arduinojson /path/to/ArduinoJson/src
+python3 tests/render_display.py --arduinojson /path/to/ArduinoJson/src \
+  --gfx /path/to/Adafruit_GFX_Library --sanitize
 python3 -m pip install playwright==1.58.0
 python3 -m playwright install chromium
 python3 tests/test_web.py
@@ -58,6 +60,20 @@ separate partly-cloudy glyph, are checked. Each category is drawn at native 16×
 size outside the temperature, stale-marker and city areas. Previews decoded from
 the actual bitmap bytes were inspected at 1× and enlarged without smoothing,
 including complete 128×64 layouts; physical OLED legibility still needs checking.
+
+`tests/render_display.py` additionally executes the actual screen drawing code
+with the pinned Adafruit_GFX rasterizer and classic font. Only the Arduino Print
+and SSD1306 hardware boundaries are substituted. It renders 51 scenarios in all
+four orientations (204 PNGs), writes `build/display-preview/index.html`, and fails
+on automatic line wraps, out-of-bounds character cells or clipped drawing. Cases
+include all main/status/setup/recovery/PIN/test/ArduinoOTA screens, missing/stale
+data, all eight weather icons, 12-hour boundaries, long SSID/IP/city labels,
+UTF-8, both temperature limits, night blanking and dissolve frames. All accepted
+ASCII city lengths 0–31 are checked too. The optional sanitizers catch memory and
+undefined-behavior errors in the host run. The color band follows the physical
+panel rotation; the previews do not simulate optical blur, brightness, I²C,
+real upload timing or actual hardware. The browser/core HTTP updater retains its
+existing progress behavior; the labeled OLED percent screen belongs to ArduinoOTA.
 
 The update handler rejects missing or zero-byte files before starting OTA.
 Firmware/filesystem delegation, aborted uploads, per-request state and guard
@@ -118,26 +134,29 @@ and size budgets passed; Python syntax and `git diff --check` passed.
 The baseline was rebuilt from aee1d3e with the same options and libraries (it is
 not assumed byte-identical to the published release artifact).
 
-| Metric | Baseline 1.9.10 | Previous 1.9.13-dev | Previous 1.10.0-dev | 1.10.0 (local build) |
-| --- | ---: | ---: | ---: | ---: |
-| Binary | 455152 B | 468224 B | 471984 B | 472272 B |
-| Static RAM | 37664 B | 36956 B | 36952 B | 36956 B |
-| IRAM code + instruction cache | 61987 B | 62007 B | 62007 B | 62007 B |
+| Metric | Baseline 1.9.10 | First 1.10.0 build | Refreshed 1.10.0 (local build) |
+| --- | ---: | ---: | ---: |
+| Binary | 455152 B | 472272 B | 474304 B |
+| Static RAM | 37664 B | 36956 B | 37068 B |
+| IRAM code + instruction cache | 61987 B | 62007 B | 62007 B |
 
-Relative to the rebuilt public 1.9.10 baseline, static RAM is 708 bytes smaller
-and the image is 17120 bytes larger, including the reliability fixes, four
-backports and redesigned interface. The native icon revision adds 32 bytes to the
-preceding compact-UI build (472240 bytes), with unchanged static RAM and
-instruction-region usage. Eight hand-drawn monochrome glyphs occupy 256 bytes in
-PROGMEM. They require no extra framebuffer, image decoder or runtime rescaling.
+Relative to the rebuilt public 1.9.10 baseline, static RAM is 596 bytes smaller
+and the image is 19152 bytes larger, including the reliability fixes, backports,
+web interface and display revision. Compared with the first 1.10.0 build at
+`5ae2387ac626`, the refreshed image adds 2032 bytes and 112 bytes of static RAM;
+instruction-region usage is unchanged.
 
-The compressed web bundle is 11716 bytes in flash (247 bytes more than the previous
-layout), streamed without copying the whole page into RAM; uncompressed sources
-are 42769 bytes. Fixed HTTP/OLED text also uses flash. The image has 6960 bytes
-left below the conservative 479232-byte
-OTA limit. Instruction-region usage remains 94.62%, with 252 bytes before the
-95% threshold. These are build measurements, not runtime heap or timing results;
-the larger combined status response still needs a hardware heap smoke test.
+The eight weather icons occupy 256 bytes in flash. The new Wi-Fi animation uses
+144 bytes, the sunrise/sunset pair 64 bytes, and the additional text glyphs and
+Latin-1 mapping 414 bytes. There is no additional framebuffer or font library,
+heap allocation for text layout, scrolling timer or startup wait.
+
+The compressed web bundle is 11892 bytes in flash, streamed without copying the
+whole page into RAM; uncompressed sources are 43243 bytes. The image has 4928 bytes
+left below the conservative 479232-byte OTA limit. Instruction-region usage
+remains 94.62%, with 252 bytes before the 95% threshold. These are build
+measurements, not runtime heap or timing results; the combined status response
+and new display behavior still need a hardware smoke test.
 
 GitHub build results and artifact revisions are linked from the
 [release page](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.10.0).

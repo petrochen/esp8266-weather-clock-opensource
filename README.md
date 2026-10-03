@@ -91,6 +91,16 @@ I redrew the weather icons pixel by pixel. At **16×16**, a filled cloud looked 
 
 *Enlarged without smoothing, with native-size samples underneath. Click for the before/after comparison and full OLED layouts.*
 
+Rendering every screen uncovered a few less obvious problems: a long city lost
+both ends, `No Data` dropped its last letter onto another line, and a quarter-turn
+made text collide. The refreshed **v1.10.0** fits the actual display dimensions,
+reads names such as `Portimão` and `Санкт-Петербург`, and adds AM/PM. Wi-Fi now has
+moving waves with a `Connecting` label; sunrise and sunset have little suns above
+the horizon. The full [screen gallery](docs/OLED_PREVIEWS.md) includes all 51
+scenarios in four orientations, before and after.
+
+[![Revised clock, long city, sunrise/sunset and Wi-Fi screens](images/oled-preview-strip.png)](docs/OLED_PREVIEWS.md)
+
 Four improvements were adapted from Stibax's fork, while retaining this project's newer network and settings code. See the [backport notes](docs/BACKPORTS.md), [release notes](docs/releases/v1.10.0.md) and [full changelog](CHANGELOG.md).
 
 For future release notifications, choose **Watch → Custom → Releases** on GitHub.

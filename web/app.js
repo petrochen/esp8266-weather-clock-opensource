@@ -118,6 +118,9 @@
     return values;
   }
   function settingsState(showMessage = false) {
+    const cityBytes = new TextEncoder().encode(formControl('city_name').value).length;
+    $('city-bytes').textContent = cityBytes;
+    formControl('city_name').setCustomValidity(cityBytes > 31 ? 'Use a shorter city label: at most 31 UTF-8 bytes. Accented and Cyrillic letters use more than one byte.' : '');
     settingsDirty = Object.keys(settingsChanges()).length > 0;
     $('save-settings').disabled = $('discard-settings').disabled = !settingsDirty || busy;
     document.querySelector('.save-bar').classList.toggle('dirty', settingsDirty);

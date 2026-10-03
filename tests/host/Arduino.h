@@ -7,6 +7,9 @@
 #define PROGMEM
 #define ICACHE_FLASH_ATTR
 #define F(x) x
+#ifndef pgm_read_byte
+#define pgm_read_byte(addr) (*(const uint8_t *)(addr))
+#endif
 using byte = uint8_t;
 unsigned long millis();
 class String : public std::string {

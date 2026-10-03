@@ -147,17 +147,7 @@ void ICACHE_FLASH_ATTR setupWiFi() {
     wifiManager.setConfigPortalTimeout(180);
 
     // Show AP mode indicator
-    display.clearDisplay();
-    display.setTextSize(1);
-    display.setTextColor(SSD1306_WHITE);
-    display.setCursor(25, 15);
-    display.print("Setup Mode");
-    display.setTextSize(1);
-    display.setCursor(10, 35);
-    display.print("Connect to WiFi:");
-    display.setCursor(10, 48);
-    display.print("TJ56654-Setup");
-    display.display();
+    showSetupScreen(false);
 
     Serial.println("Attempting WiFiManager auto-connect...");
     if (!wifiManager.autoConnect("TJ56654-Setup", "12345678")) {

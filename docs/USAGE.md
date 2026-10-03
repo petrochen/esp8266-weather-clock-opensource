@@ -26,6 +26,15 @@ cloud (partly cloudy), outline cloud (overcast), fog bands, cloud with rain stro
 snowflake, cloud with lightning, or `?` for an unknown code. The hollow cloud and
 separate precipitation marks avoid a solid bright patch beside the temperature.
 
+The refreshed v1.10.0 adapts text to the actual display orientation. Clock and
+status text are centered; 12-hour time includes AM/PM. Long city labels use the
+small font and wrap inside the footer, with no scrolling or extra startup delay.
+The PIN screen temporarily stays in landscape so its six digits remain large.
+Wi-Fi waves and a `Connecting` label show connection activity; sun/horizon icons
+identify sunrise and sunset. See the [complete render gallery](OLED_PREVIEWS.md).
+These changes are in the refreshed v1.10.0 build, replacing the first build from
+commit `5ae2387ac626` under the same release number.
+
 ## Settings
 
 Open **Settings** (`/config`). Ordinary settings do not require a PIN. Changes
@@ -47,6 +56,15 @@ the groups stack and the action bar stays within reach while scrolling.
 Display and weather changes apply without restarting. Changing the WiFi network
 or password, device name, or NTP server restarts the clock. After changing network
 details you may need its new address to reconnect.
+
+**City label is limited to 31 UTF-8 bytes**, including spaces. That is at most
+31 ASCII characters or 15 Russian letters (a mixed name can differ). For example,
+`Санкт-Петербург` uses 29 bytes. A 55-character city name is rejected, rather than
+silently shortened. Use a short display label; coordinates determine the weather.
+The byte counter in Settings catches this before saving. The OLED supports ASCII,
+Russian letters including Ё/ё, and common Latin-1 accents; some uncommon Latin
+accents fall back to their base letter and unsupported scripts/emoji show `?`.
+Original UTF-8 text stays intact in settings and in the browser.
 
 The UTC offset is the **base/winter offset**. European automatic DST adds one hour
 between the last Sundays in March and October. It is not a general timezone
@@ -120,5 +138,6 @@ In **Settings → Restart & reset**, choose the action, show/read the PIN, and c
 | Reset all settings | Clear EEPROM and SDK WiFi credentials; next boot uses defaults and generates a new PIN |
 | Three quick power cycles | Recover WiFi access; other settings and the PIN are kept |
 
-The physical recovery screen says `FACTORY RESET!`, but that path resets WiFi only.
+The physical recovery screen says `WiFi reset`; the first v1.10.0 build and older builds
+say `FACTORY RESET!`. That path resets WiFi only.
 For timing and setup instructions, see [Recovery and reset](INSTALLATION.md#recovery-and-reset).
