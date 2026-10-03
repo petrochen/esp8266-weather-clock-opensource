@@ -1,0 +1,32 @@
+{
+  "1.10.0": {
+    "storage": "eeprom-v1",
+    "github": false,
+    "forecast": false,
+    "version_picker": false
+  },
+  "1.11.0-beta.1": {
+    "storage": "eeprom-v1",
+    "github": false,
+    "forecast": true,
+    "version_picker": false
+  },
+  "1.11.0-beta.2": {
+    "storage": "eeprom-v1",
+    "github": true,
+    "forecast": true,
+    "version_picker": false
+  },
+  "1.11.0-beta.3": {
+    "storage": "eeprom-v1",
+    "github": true,
+    "forecast": true,
+    "version_picker": false
+  },
+  "1.11.0-beta.4": {
+    "storage": "eeprom-v1",
+    "github": true,
+    "forecast": true,
+    "version_picker": true
+  }
+}

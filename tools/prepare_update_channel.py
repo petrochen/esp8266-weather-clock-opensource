@@ -5,6 +5,7 @@ BUILD_INFO and SHA256SUMS identify the canonical image (a release can contain
 older rebuilt images). A dedicated Git branch supplies CORS-enabled raw files.
 """
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -33,7 +34,7 @@ def download(url, limit):
     return data
 
 
-def prepare(release, checksums, image, output, revision=None):
+def prepare(release, checksums, image, output, revision=None, *, history_only=False):
     """Validate metadata/bytes first; only then write the image and catalog."""
     tag = release['tag_name']
     if not tag.startswith('v'):
@@ -58,13 +59,47 @@ def prepare(release, checksums, image, output, revision=None):
         raise ValueError('Existing update catalog is incompatible')
     channel = 'beta' if beta else 'stable'
     old = catalog.get(channel)
-    if old and version_key(old['version']) > version_key(version):
+    if not history_only and old and version_key(old['version']) > version_key(version):
         raise ValueError('Refusing to move the channel to an older version')
-    catalog[channel] = {'version': version, 'size': len(image), 'sha256': digest}
+    entry = {'version': version, 'size': len(image), 'sha256': digest}
+    profiles = json.loads(Path(__file__).with_name('update_profiles.json').read_text())
+    profile = profiles.get(version)
+    if (not profile or profile.get('storage') != 'eeprom-v1' or
+            any(type(profile.get(key)) is not bool for key in ('github', 'forecast', 'version_picker'))):
+        raise ValueError('Release requires an audited storage/capability profile')
+    if not history_only:
+        catalog[channel] = entry
+    history_path = output / 'releases.json'
+    history = json.loads(history_path.read_text()) if history_path.exists() else {'schema': 2, 'target': TARGET, 'releases': []}
+    if history.get('schema') != 2 or history.get('target') != TARGET or not isinstance(history.get('releases'), list):
+        raise ValueError('Existing release history is incompatible')
+    item = {**entry, 'published': release['published_at'], 'revision': name[-16:-4],
+            'profile': profile, 'status': 'available'}
+    existing = next((r for r in history['releases'] if r['version'] == version), None)
+    if existing:
+        # Re-running publication must not silently replace a build or revive a revoked one.
+        if any(existing.get(key) != item[key] for key in ('sha256', 'size', 'revision', 'profile')):
+            raise ValueError('Release history is immutable; publish a new version')
+        if existing.get('status') != 'available' and not history_only:
+            raise ValueError('Withdrawn releases cannot become a channel recommendation')
+    else:
+        history['releases'].append(item)
+    history['releases'].sort(key=lambda r: version_key(r['version']), reverse=True)
+    history['recommended'] = {key: catalog[key]['version'] for key in ('stable', 'beta') if key in catalog}
+    previous = json.loads(history_path.read_text()) if history_path.exists() else None
+    if previous != history:
+        history['published'] = datetime.now(timezone.utc).isoformat(timespec='seconds')
+    legacy_bytes = json.dumps(catalog, indent=2) + '\n'
+    history_bytes = json.dumps(history, indent=2) + '\n'
+    if len(legacy_bytes.encode()) > 4096 or len(history_bytes.encode()) > 32768:
+        raise ValueError('Catalog size budget exceeded; no files written')
+    # All validation precedes writes. The workflow publishes these files in ONE
+    # commit, so browsers never see a catalog before its verified image exists.
     firmware = output / 'firmware'
     firmware.mkdir(parents=True, exist_ok=True)
     (firmware / (digest + '.bin')).write_bytes(image)
-    catalog_path.write_text(json.dumps(catalog, indent=2) + '\n')
+    catalog_path.write_text(legacy_bytes)
+    history_path.write_text(history_bytes)
     return name
 
 
@@ -97,6 +132,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--tag', required=True)
     parser.add_argument('--output', type=Path, required=True, help='Existing update-channel checkout or a new staging directory')
+    parser.add_argument('--history-only', action='store_true', help='Add an audited old release without changing latest channels')
     args = parser.parse_args()
     if not args.tag.startswith('v'):
         parser.error('tag must start with v')
@@ -115,7 +151,7 @@ def main():
     revision = build_revision(release, asset_data('BUILD_INFO.txt', 8192).decode('utf-8'))
     name, _ = canonical_image(release, checksums, revision)
     image = asset_data(name, 479232)
-    prepare(release, checksums, image, args.output, revision)
+    prepare(release, checksums, image, args.output, revision, history_only=args.history_only)
     print(f'Staged {args.tag}: {len(image)} bytes; release digest, checksum and image header verified')
 
 
