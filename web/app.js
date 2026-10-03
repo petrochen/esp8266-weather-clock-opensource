@@ -9,11 +9,11 @@
   let state, receivedAt = 0, polling = false, busy = false, savedSettings, settingsDirty = false;
   let maintenanceAction = '';
   const settingsForm = $('settings-form');
-  const screenNames = ['Time', 'Weather', 'Sunrise / sunset', 'Outdoor comfort', 'Hourly rain', 'Daily forecast', 'Wind', 'External card'];
-  const durationKeys = ['clock', 'weather', 'sun', 'comfort', 'rain', 'daily', 'wind'];
+  const screenNames = ['Time', 'Weather', 'Sunrise / sunset', 'Outdoor comfort', 'Hourly rain', 'Daily forecast', 'Wind', 'External card', 'UV daytime peak'];
+  const durationKeys = ['clock', 'weather', 'sun', 'comfort', 'rain', 'daily', 'wind', 'uv'];
   durationKeys.forEach((key, index) => {
     const row = document.createElement('div'); row.className = 'form-row';
-    const label = document.createElement('label'); label.htmlFor = 'duration-' + key; label.textContent = screenNames[index];
+    const label = document.createElement('label'); label.htmlFor = 'duration-' + key; label.textContent = key === 'uv' ? 'UV daytime peak' : screenNames[index];
     const input = document.createElement('input'); input.id = label.htmlFor; input.name = 'screen_' + key + '_sec';
     input.type = 'number'; input.min = 0; input.max = 120; input.value = 0; input.required = true;
     row.append(label, input); $('screen-durations').append(row);
@@ -50,8 +50,21 @@
     }
     return new Date((epoch + offset) * 1000);
   }
+  function renderUV() {
+    const target = $('uv-summary'), weather = state.weather;
+    const dayNumber = epoch => Math.floor(forecastDate(epoch).getTime() / 86400000);
+    const today = dayNumber(state.time.epoch);
+    const uv = ahead => (state.forecast?.days || []).find(day => day.epoch && dayNumber(day.epoch) === today + ahead)?.uv;
+    const format = value => Number.isFinite(value) && value >= 0 ? String(Math.round(value)) : '—';
+    const value = uv(0), rounded = Math.round(value);
+    const level = rounded < 3 ? 'Low' : rounded < 6 ? 'Moderate' : rounded < 8 ? 'High' : rounded < 11 ? 'Very high' : 'Extreme';
+    target.textContent = weather.enabled && weather.valid && state.time.ntp_synced
+      ? `Daytime UV peak · today ${format(value)}${format(value) === '—' ? '' : ' · ' + level} · tomorrow ${format(uv(1))}${weather.stale ? ' · Saved forecast' : ''}`
+      : 'Daytime UV peak · waiting for forecast and synchronized time';
+  }
   function renderForecast() {
     const weather = state.weather;
+    renderUV();
     const details = [];
     if (weather.valid && weather.comfort_valid) details.push(`Feels like ${degrees(weather.feels_like).toFixed(1)}${degreeUnit()}`);
     if (weather.valid && weather.humidity >= 0) details.push(`Outdoor humidity ${weather.humidity}%`);
@@ -241,7 +254,7 @@
     const preset = event.target.value;
     const detailed = preset === 'weather';
     const values = {show_weather: detailed, show_sunrise_sunset: detailed, clock_weather: event.target.value !== 'clock',
-      show_comfort: detailed, show_rain: detailed, show_daily: detailed, show_wind: detailed};
+      show_comfort: detailed, show_rain: detailed, show_daily: detailed, show_wind: detailed, show_uv: preset !== 'clock'};
     durationKeys.forEach(key => { values['screen_' + key + '_sec'] = key === 'clock' ? 20 : 5; });
     // A preset changes only its own controls, preserving other unsaved edits.
     stageSettings({...settingsChanges(), ...values});

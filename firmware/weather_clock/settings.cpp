@@ -166,6 +166,8 @@ static const FeatureField featureFields[] = {
   {"show_comfort", &FeatureSettings::show_comfort, 0},
   {"show_rain", &FeatureSettings::show_rain, 0},
   {"show_daily", &FeatureSettings::show_daily, 0},
+  {"show_uv", &FeatureSettings::show_uv, 0},
+  {"screen_uv_sec", &FeatureSettings::screen_uv_sec, 120},
   {"show_wind", &FeatureSettings::show_wind, 0}
 };
 

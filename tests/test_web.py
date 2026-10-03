@@ -28,12 +28,12 @@ config = dict(firmware_version=version, ssid='Home', hostname='living-room-clock
               display_rotation_sec=5, display_orientation=2, show_weather=True, show_sunrise_sunset=True,
               night_enabled=False, night_start_hour=23, night_start_minute=0, night_end_hour=7, night_end_minute=0)
 config.update(clock_weather=False, dissolve=True, temperature_unit=0, wind_unit=0, night_action=0, night_brightness=0,
-              external_enabled=False, sun_countdown=False, show_comfort=False, show_rain=False, show_daily=False, show_wind=False)
-config.update({'screen_' + key + '_sec': 0 for key in ['clock', 'weather', 'sun', 'comfort', 'rain', 'daily', 'wind']})
-status['display'].update(screen=0, paused=False, available=[True, True, True, False, False, False, False, False])
+              external_enabled=False, sun_countdown=False, show_comfort=False, show_rain=False, show_daily=False, show_wind=False, show_uv=False)
+config.update({'screen_' + key + '_sec': 0 for key in ['clock', 'weather', 'sun', 'comfort', 'rain', 'daily', 'wind', 'uv']})
+status['display'].update(screen=0, paused=False, available=[True, True, True, False, False, False, False, False, False])
 status['units'] = dict(temperature=0, wind=0)
 status['weather'].update(comfort_valid=True, feels_like=21.2, humidity=68, wind_direction=270, is_day=True, source_epoch=1791031500)
-status['forecast'] = dict(hours=[dict(epoch=1791036000, temperature=22, rain=60)], days=[dict(epoch=1790985600, low=16, high=23, uv=4.2, valid=True)])
+status['forecast'] = dict(hours=[dict(epoch=1791036000, temperature=22, rain=60)], days=[dict(epoch=1790985600, low=16, high=23, uv=4.2, valid=True), dict(epoch=1791072000, low=15, high=22, uv=5.8, valid=True)])
 calls = []
 updates = []
 pins = []
@@ -290,6 +290,24 @@ with sync_playwright() as p:
     page.locator('.forecast-panel summary').click()
     assert '60%' in page.locator('#hourly-forecast').inner_text()
     assert '4.2' in page.locator('#daily-forecast').inner_text()
+    assert 'today 4 · Moderate · tomorrow 6' in page.locator('#uv-summary').inner_text()
+    original_days = deepcopy(api_status['forecast']['days'])
+    for value, level in [(0, 'Low'), (2.5, 'Moderate'), (6.2, 'High'), (7.8, 'Very high'), (11, 'Extreme')]:
+        api_status['forecast']['days'][0]['uv'] = value
+        page.locator('#refresh').click()
+        page.locator('#uv-summary').filter(has_text=f'today {int(value + 0.5)} · {level}').wait_for()
+    api_status['forecast']['days'][0]['uv'] = -1
+    page.locator('#refresh').click();page.locator('#uv-summary').filter(has_text='today —').wait_for()
+    assert 'tomorrow 6' in page.locator('#uv-summary').inner_text()
+    original_epoch = api_status['time']['epoch']
+    api_status['time']['epoch'] += 86400
+    page.locator('#refresh').click();page.locator('#uv-summary').filter(has_text='today 6 · High · tomorrow —').wait_for()
+    api_status['time']['epoch'] = original_epoch
+    api_status['forecast']['days'] = original_days
+    api_status['weather']['stale'] = True
+    page.locator('#refresh').click();page.locator('#uv-summary').filter(has_text='Saved forecast').wait_for()
+    api_status['weather']['stale'] = False
+
     api_status['units'] = dict(temperature=1, wind=1)
     page.locator('#refresh').click()
     page.locator('#weather-unit').filter(has_text='°F').wait_for()
@@ -306,6 +324,7 @@ with sync_playwright() as p:
     before_updates = len(updates)
     page.locator('#wifi-password').fill('pending-secret')
     page.locator('#screen-preset').select_option('weather')
+    assert page.locator('[name=show_uv]').is_checked()
     assert page.locator('[name=clock_weather]').is_checked()
     assert page.locator('[name=show_rain]').is_checked()
     assert page.locator('#wifi-password').input_value() == 'pending-secret'

@@ -6,13 +6,13 @@ Local checks completed on 2026-10-03 using the pinned toolchain below:
 
 | Check | Result |
 | --- | --- |
-| ESP-01S binary | **477,600 bytes**, below the conservative 479,232-byte OTA budget by **1,632 bytes** |
-| Static RAM | **38,916 bytes**, below the 45,000-byte project budget |
+| ESP-01S binary | **478,624 bytes**, below the conservative 479,232-byte OTA budget by **608 bytes** |
+| Static RAM | **39,044 bytes**, below the 45,000-byte project budget |
 | Instruction region including 32 KB cache | **62,007 / 65,536 bytes** (94.62%, below 95%) |
-| Embedded web page | 51,110 bytes before gzip, **14,890 bytes** in flash after minification/gzip |
-| Host regressions | Passed, including feature EEPROM isolation, atomic validation, source age, parser allocation exhaustion, optional/misaligned forecast arrays, screen timing and card expiry |
-| Actual OLED raster | **288 renders**, zero automatic wraps/clipped cells/clipped ink; ASan/UBSan passed |
-| Chromium against embedded minified UI | Passed desktop/mobile, import preview, presets, dirty-state preservation, forecast/units/control, hidden-tab polling and PIN/upload guards |
+| Embedded web page | 52,041 bytes before gzip, **15,246 bytes** in flash after minification/gzip |
+| Host regressions | Passed, including feature EEPROM isolation, atomic validation, source age, parser allocation exhaustion, optional/misaligned forecast arrays, screen timing, card expiry, UV levels/date rollover/missing values and reserved-byte migration |
+| Actual OLED raster | **320 renders**, zero automatic wraps/clipped cells/clipped ink; ASan/UBSan passed |
+| Chromium against embedded minified UI | Passed desktop/mobile, import preview, presets, dirty-state preservation, forecast/units/control, UV levels/missing/stale values, hidden-tab polling and PIN/upload guards |
 | Compact setup portal | Upstream templates/scripts tested at 320 px, including 32-character wide SSID, open/locked selection and password visibility |
 | Home Assistant example | YAML and 10 Jinja templates parsed; rendered REST command bodies are valid JSON |
 | Live provider sample | Public-coordinate Open-Meteo response: 1,213 bytes, 6 hours/2 days; parsed by the production module in the host harness |

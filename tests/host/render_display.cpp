@@ -69,6 +69,14 @@ int main(int argc,char** argv){
  ESP.nextValue=123456;setupMaintenance();
  struct Case{const char* name;std::function<void()> draw;};
  std::vector<Case> cases={
+  {"uv-low",[]{sampleForecast();forecast.days[0].uv=0;displayExtra(UV_SCREEN);}},
+  {"uv-moderate",[]{sampleForecast();forecast.days[0].uv=4.2;displayExtra(UV_SCREEN);}},
+  {"uv-high",[]{sampleForecast();forecast.days[0].uv=6.2;displayExtra(UV_SCREEN);}},
+  {"uv-very-high",[]{sampleForecast();forecast.days[0].uv=8.4;displayExtra(UV_SCREEN);}},
+  {"uv-extreme",[]{sampleForecast();forecast.days[0].uv=11.2;displayExtra(UV_SCREEN);}},
+  {"uv-maximum",[]{sampleForecast();forecast.days[0].uv=30;displayExtra(UV_SCREEN);}},
+  {"uv-stale",[]{sampleForecast();weather.stale=true;displayExtra(UV_SCREEN);}},
+  {"uv-missing",[]{sampleForecast();forecast.days[0].uv=-1;forecast.days[1].uv=-1;displayExtra(UV_SCREEN);}},
   {"combined",[]{featureSettings.clock_weather=1;updateDisplay();}},
   {"combined-12h",[]{featureSettings.clock_weather=1;config.hour_format_24=false;updateDisplay();}},
   {"combined-fahrenheit",[]{featureSettings.clock_weather=1;featureSettings.temperature_unit=1;weather.temperature=-100;weather.stale=true;updateDisplay();}},

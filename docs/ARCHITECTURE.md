@@ -5,7 +5,10 @@
 A separate `FeatureSettings` record (magic FTR1, 32 bytes at EEPROM 432) keeps the
 legacy Config ABI untouched. Invalid records load conservative defaults without a
 migration write. One settings transaction validates Config, night and features
-before committing. External card data, hold state and forecasts live only in RAM.
+before committing. External card data, hold state and forecasts live only in RAM. UV uses two former
+reserved bytes (show flag and duration) without changing record size/magic;
+previous beta records have these bytes zeroed. Existing screen IDs 0–7 remain
+stable; UV is ID 8.
 
 The weather request fetches current conditions, six hourly slots and two daily
 slots using Unix UTC timestamps. A 3072-byte transport check aborts oversized
@@ -15,7 +18,7 @@ size). Current fields are required, optional data is explicitly unavailable.
 A successful response replaces the forecast. Display conversions leave stored
 values/API units canonical. Sun times/countdowns use the clock's offset/DST.
 
-Seven normal screen IDs plus one transient card share the scheduler. Zero dwell
+Eight normal screen IDs plus one transient card share the scheduler. Zero dwell
 means inherit, availability gates selection, and expiring a held card returns to
 the clock. PIN/test overlays and night rules retain precedence. Dimming issues
 contrast commands only when needed; static pages still suppress redundant frames.

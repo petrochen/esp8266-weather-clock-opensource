@@ -34,6 +34,20 @@ bool ICACHE_FLASH_ATTR externalCardActive() {
   return featureSettings.external_enabled && externalCard.ttl && uint32_t(millis() - externalCard.received) < externalCard.ttl;
 }
 
+// A missing/expired today entry must never be replaced with tomorrow's UV.
+static float ICACHE_FLASH_ATTR forecastUV(uint8_t ahead) {
+  if (!config.weather_enabled || !weather.valid || !timeIsSynced) return -1;
+  uint32_t now = getAsyncEpoch();
+  uint32_t target = (now + getTotalOffset(now)) / 86400 + ahead;
+  for (const auto& day : forecast.days)
+    if (day.epoch && (day.epoch + getTotalOffset(day.epoch)) / 86400 == target) return day.uv;
+  return -1;
+}
+
+static const char* ICACHE_FLASH_ATTR uvLevel(int index) {
+  return index < 3 ? "Low" : index < 6 ? "Moderate" : index < 8 ? "High" : index < 11 ? "Very high" : "Extreme";
+}
+
 static uint8_t ICACHE_FLASH_ATTR firstHour() {
   uint8_t i = 0;
   while (i < forecast.count && timeIsSynced && forecast.hours[i].epoch <= getAsyncEpoch()) ++i;
@@ -199,6 +213,18 @@ static void ICACHE_FLASH_ATTR displayExtra(uint8_t mode) {
     displayText(externalCard.title, 0, portrait ? 24 : 16);
     displayText(externalCard.value, body + 4, portrait ? 56 : 24, 3);
     displayFooter(externalCard.unit, 2);
+  } else if (mode == UV_SCREEN) {
+    displayText(weather.stale ? "UV today max *" : "UV today max", 0, portrait ? 24 : 8);
+    float uv = forecastUV(0);
+    int index = int(uv + 0.5f); // international index categories use whole numbers
+    if (uv >= 0) snprintf(line, sizeof(line), "%d", index);
+    else strcpy(line, "--");
+    displayText(line, portrait ? 32 : 12, 24, 3);
+    displayText(uv >= 0 ? uvLevel(index) : "No forecast", portrait ? 68 : 38, portrait ? 24 : 8);
+    float tomorrow = forecastUV(1);
+    if (tomorrow >= 0) snprintf(line, sizeof(line), "Tomorrow %d", int(tomorrow + 0.5f));
+    else strcpy(line, "Tomorrow --");
+    displayFooter(line);
   } else if (mode == 3) {
     displayText(weather.stale ? "Outdoor *" : "Outdoor", 0, 8);
     snprintf(line, sizeof(line), "%.0f%s", displayTemperature(weather.temperature), temperatureUnit());
@@ -277,11 +303,11 @@ bool ICACHE_FLASH_ATTR controlDisplay(const char* action, int screen) {
   if (!strcmp(action, "resume")) displayPaused = false;
   else if (!strcmp(action, "hold")) displayPaused = true;
   else if (!strcmp(action, "show")) {
-    if (screen < 0 || screen > SCREEN_COUNT || !isModeEnabled(uint8_t(screen))) return false;
+    if (screen < 0 || screen >= DISPLAY_MODE_COUNT || !isModeEnabled(uint8_t(screen))) return false;
     displayMode = screen; displayPaused = true;
   } else if (!strcmp(action, "next")) {
-    for (uint8_t i = 1; i <= SCREEN_COUNT + 1; ++i) {
-      uint8_t next = (displayMode + i) % (SCREEN_COUNT + 1);
+    for (uint8_t i = 1; i <= DISPLAY_MODE_COUNT; ++i) {
+      uint8_t next = (displayMode + i) % DISPLAY_MODE_COUNT;
       if (isModeEnabled(next)) { displayMode = next; break; }
     }
   } else return false;
@@ -340,8 +366,9 @@ void ICACHE_FLASH_ATTR updateDisplayRotation() {
   applyBrightness(night ? featureSettings.night_brightness : config.brightness);
   if (!isModeEnabled(displayMode)) { displayMode = 0; inTransition = false; invalidateDisplay(); }
   if (inTransition && !isModeEnabled(nextDisplayMode)) { inTransition = false; invalidateDisplay(); }
-  unsigned long interval = (displayMode < SCREEN_COUNT && featureSettings.seconds[displayMode]
-    ? featureSettings.seconds[displayMode] : config.display_rotation_sec) * 1000UL;
+  uint8_t duration = displayMode == UV_SCREEN ? featureSettings.screen_uv_sec :
+    displayMode < SCREEN_COUNT ? featureSettings.seconds[displayMode] : 0;
+  unsigned long interval = (duration ? duration : config.display_rotation_sec) * 1000UL;
 
   // Handle active dissolve transition (two phases)
   if (inTransition) {
@@ -389,9 +416,9 @@ void ICACHE_FLASH_ATTR updateDisplayRotation() {
     uint8_t attempts = 0;
     nextDisplayMode = displayMode;
     do {
-      nextDisplayMode = (nextDisplayMode + 1) % (SCREEN_COUNT + 1);
+      nextDisplayMode = (nextDisplayMode + 1) % DISPLAY_MODE_COUNT;
       attempts++;
-      if (attempts >= SCREEN_COUNT + 1) {
+      if (attempts >= DISPLAY_MODE_COUNT) {
         nextDisplayMode = 0;
         Serial.println("WARNING: No display mode enabled, forcing time mode");
         break;
@@ -434,6 +461,7 @@ bool ICACHE_FLASH_ATTR isModeEnabled(uint8_t mode) {
     case 5: return featureSettings.show_daily && firstDay() < 2;
     case 6: return featureSettings.show_wind && weather.valid;
     case SCREEN_COUNT: return externalCardActive();
+    case UV_SCREEN: return featureSettings.show_uv && forecastUV(0) >= 0;
   }
   return false;
 }

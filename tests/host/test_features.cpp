@@ -12,7 +12,7 @@ int main() {
   assert(EEPROM.bytes == original && EEPROM.commits == 0);
   const char* error = nullptr;
   JsonDocument doc;
-  for (const char* input : {"{\"temperature_unit\":2}", "{\"wind_unit\":3}",
+  for (const char* input : {"{\"show_uv\":1}", "{\"screen_uv_sec\":121}", "{\"temperature_unit\":2}", "{\"wind_unit\":3}",
        "{\"screen_clock_sec\":121}", "{\"screen_rain_sec\":-1}", "{\"night_action\":1.5}",
        "{\"night_brightness\":8}", "{\"clock_weather\":1}", "{\"show_rain\":null}",
        "{\"external_enabled\":\"yes\"}", "{\"screen_clock_sec\":\"10junk\"}"}) {
@@ -20,7 +20,7 @@ int main() {
     assert(!updateFeatureSettings(featureSettings, doc.as<JsonObjectConst>(), error));
     assert(!memcmp(&before, &featureSettings, sizeof(before)));
   }
-  deserializeJson(doc, R"({"clock_weather":true,"show_rain":true,"dissolve":false,"screen_clock_sec":120,"temperature_unit":1,"wind_unit":2,"night_action":1,"night_brightness":2})");
+  deserializeJson(doc, R"({"show_uv":true,"screen_uv_sec":12,"clock_weather":true,"show_rain":true,"dissolve":false,"screen_clock_sec":120,"temperature_unit":1,"wind_unit":2,"night_action":1,"night_brightness":2})");
   assert(updateFeatureSettings(featureSettings, doc.as<JsonObjectConst>(), error));
   doc.clear(); exportFeatureSettings(featureSettings, doc);
   FeatureSettings roundtrip;
@@ -35,6 +35,12 @@ int main() {
       assert(EEPROM.bytes[i] == beforeSave[i]);
   featureSettings = FeatureSettings(); loadFeatureSettings();
   assert(featureSettings.clock_weather && featureSettings.seconds[0] == 120 && !featureSettings.dissolve);
+  assert(featureSettings.show_uv && featureSettings.screen_uv_sec == 12);
+  // Original beta feature records had zeroed reserved bytes at these offsets.
+  static_assert(offsetof(FeatureSettings, show_uv) == 23, "UV reuses the old reserved area");
+  FeatureSettings legacy; memset(reinterpret_cast<uint8_t*>(&legacy) + 23, 0, 9);
+  EEPROM.put(FEATURE_SETTINGS_ADDR, legacy); loadFeatureSettings();
+  assert(!featureSettings.show_uv && !featureSettings.screen_uv_sec);
   FeatureSettings broken; broken.night_brightness = 8;
   EEPROM.put(FEATURE_SETTINGS_ADDR, broken); loadFeatureSettings(); assert(featureSettings.night_brightness == 0);
   broken = FeatureSettings(); broken.seconds[6] = 255;

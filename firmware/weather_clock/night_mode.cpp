@@ -36,7 +36,8 @@ void ICACHE_FLASH_ATTR loadFeatureSettings() {
   valid = valid && saved.clock_weather <= 1 && saved.dissolve <= 1 && saved.temperature_unit <= 1 &&
     saved.wind_unit <= 2 && saved.night_action <= 1 && saved.night_brightness <= 7 &&
     saved.external_enabled <= 1 && saved.sun_countdown <= 1 && saved.show_comfort <= 1 &&
-    saved.show_rain <= 1 && saved.show_daily <= 1 && saved.show_wind <= 1;
+    saved.show_rain <= 1 && saved.show_daily <= 1 && saved.show_wind <= 1 &&
+    saved.show_uv <= 1 && saved.screen_uv_sec <= 120;
   featureSettings = valid ? saved : FeatureSettings();
 }
 

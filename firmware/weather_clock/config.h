@@ -63,7 +63,8 @@ struct NightSettings {
 // Separate record: old firmware can still read Config and NightSettings.
 constexpr uint16_t FEATURE_SETTINGS_ADDR = 432;
 constexpr uint32_t FEATURE_SETTINGS_MAGIC = 0x46545231; // FTR1
-constexpr uint8_t SCREEN_COUNT = 7;
+constexpr uint8_t SCREEN_COUNT = 7; // original timed pages; external card remains ID 7
+constexpr uint8_t UV_SCREEN = 8, DISPLAY_MODE_COUNT = 9;
 struct FeatureSettings {
   uint32_t magic = FEATURE_SETTINGS_MAGIC;
   uint8_t seconds[SCREEN_COUNT] = {}; // zero inherits the legacy interval
@@ -72,7 +73,8 @@ struct FeatureSettings {
   uint8_t night_action = 0, night_brightness = 0; // off/dim
   uint8_t external_enabled = 0, sun_countdown = 0;
   uint8_t show_comfort = 0, show_rain = 0, show_daily = 0, show_wind = 0;
-  uint8_t reserved[9] = {};
+  uint8_t show_uv = 0, screen_uv_sec = 0; // former reserved bytes, preserving the record ABI
+  uint8_t reserved[7] = {};
 };
 static_assert(sizeof(FeatureSettings) == 32, "Stable feature record layout");
 

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Add optional combined clock/weather, outdoor comfort, hourly rain, two-day
   min/max/UV, wind direction, moon and next-sun-event countdown.
+- Add a dedicated daytime UV peak screen with today/tomorrow values and levels,
+  plus a visible web summary; preserve screen IDs and feature EEPROM layout.
 - Add screen presets, per-page durations, hold/next/direct selection, configurable
   transitions, temperature/wind units and scheduled night dimming.
 - Extend local status/control APIs and add one opt-in external card with bounded
@@ -18,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Preserve legacy settings/PIN storage and API units. Bound weather response and
   parser memory; distinguish download age from source age.
 - Recover flash through pinned build-time minification and compact setup portal
-  resources; add regressions and 288 native OLED renders.
+  resources; add regressions and 320 native OLED renders.
 
 See [beta release notes](docs/releases/v1.11.0-beta.1.md). Prepared locally; physical
 OTA, provisioning and long-running beta validation are still pending.

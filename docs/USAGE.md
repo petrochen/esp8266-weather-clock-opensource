@@ -4,7 +4,7 @@
 
 The source tree now targets **1.11.0-beta.1**; the sections below also describe the
 compatible stable controls. Start with Settings → **Time & weather** → Save for a
-large clock with a weather footer. **Clock only** hides weather pages;
+large clock with a weather footer, alternating with the UV daytime peak. **Clock only** hides weather pages;
 **Detailed weather** enables the extra pages. Presets stage changes before Save
 and keep unrelated unsaved settings. Discard restores the saved configuration.
 
@@ -37,6 +37,20 @@ For room readings, see [Home Assistant](HOME_ASSISTANT.md).
 Once the clock is on WiFi, open its IP address or `http://tj56654-clock.local/`
 where mDNS is available. The base controls are shared with 1.10.0. For the first
 flash or recovery, see [Installation](INSTALLATION.md).
+
+## UV daytime peak
+
+Enable **UV daytime peak** in More display options, or select the Time & weather
+preset and Save. The screen shows today's predicted daily maximum, its level and
+tomorrow's maximum. It has its own duration setting and direct screen selection.
+The web Clock page shows the same summary without expanding forecast details.
+
+Levels use the rounded whole index: 0–2 Low, 3–5 Moderate, 6–7 High, 8–10 Very high,
+11+ Extreme. The API and forecast table retain the provider's decimal value.
+This is a daytime peak forecast, even when viewed at night; it is not current UV.
+Missing/expired days are not replaced by tomorrow, and stale data is marked.
+The dedicated page requires a synchronized clock and today's available UV value.
+New screen settings default off on upgrade; selecting the preset enables them.
 
 ## Clock
 

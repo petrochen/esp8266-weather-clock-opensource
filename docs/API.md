@@ -11,7 +11,7 @@ and the same local-network access model as ordinary settings, without a PIN.
 | `POST /api/card` | `{"title":"Room CO2","value":"920","unit":"ppm","ttl":180}`; 512-byte body limit |
 
 `show` selects and holds an enabled, available page; `resume` resumes rotation.
-IDs are 0 clock, 1 weather, 2 sun, 3 comfort, 4 rain, 5 daily, 6 wind, 7 external.
+IDs are 0 clock, 1 weather, 2 sun, 3 comfort, 4 rain, 5 daily, 6 wind, 7 external, 8 UV daytime peak.
 Night mode and maintenance overlays still take precedence. Invalid/unavailable
 selections return 400. Controls and cards do not persist across restart.
 
@@ -26,7 +26,7 @@ Additional `/api/status` fields:
 | Object | Fields and meaning |
 | --- | --- |
 | `time` | `dst_enabled` selects the existing European DST rule |
-| `display` | `screen`, `paused`, `available` (8 booleans in ID order), `night_dim` (configured dim action, independent of whether night is active) |
+| `display` | `screen`, `paused`, `available` (9 booleans in ID order), `night_dim` (configured dim action, independent of whether night is active) |
 | `units` | `temperature`: 0 °C / 1 °F; `wind`: 0 km/h / 1 m/s / 2 mph; display preferences only |
 | `weather` | `source_epoch` UTC, `source_age_seconds`, `is_day`, `comfort_valid`, `feels_like` °C, `humidity` percent (-1 absent), `wind_direction` degrees (-1 absent) |
 | `forecast.hours` | Up to 6 entries: UTC `epoch`, `temperature` °C, `rain` probability percent (-1 absent); the array may be absent when empty |
@@ -44,9 +44,9 @@ New config fields (exported and accepted by the existing config endpoint):
 
 | Field | Values |
 | --- | --- |
-| `screen_clock_sec`, `screen_weather_sec`, `screen_sun_sec`, `screen_comfort_sec`, `screen_rain_sec`, `screen_daily_sec`, `screen_wind_sec` | Integer 0–120; 0 inherits the legacy common interval, not “hide” |
+| `screen_clock_sec`, `screen_weather_sec`, `screen_sun_sec`, `screen_comfort_sec`, `screen_rain_sec`, `screen_daily_sec`, `screen_wind_sec`, `screen_uv_sec` | Integer 0–120; 0 inherits the legacy common interval, not “hide” |
 | `clock_weather`, `dissolve`, `sun_countdown`, `external_enabled` | Boolean |
-| `show_comfort`, `show_rain`, `show_daily`, `show_wind` | Boolean |
+| `show_comfort`, `show_rain`, `show_daily`, `show_wind`, `show_uv` | Boolean |
 | `temperature_unit` | 0 °C, 1 °F |
 | `wind_unit` | 0 km/h, 1 m/s, 2 mph |
 | `night_action` | 0 off, 1 dim |

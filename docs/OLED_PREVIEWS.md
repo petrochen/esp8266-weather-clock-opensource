@@ -2,10 +2,10 @@
 
 ## 1.11 beta gallery
 
-The prepared beta adds 21 scenarios for combined time/weather, outdoor comfort,
+The prepared beta adds 29 scenarios for combined time/weather, outdoor comfort,
 rain, daily min/max/UV, wind units/direction, moon, sun countdown, external cards
-and dimming, including missing/extreme values. Together with the 51 existing
-cases, **72 scenarios × 4 orientations = 288 actual GFX renders** are checked.
+and dimming, including eight UV scenarios (all levels, absent/stale data). Together with the 51 existing
+cases, **80 scenarios × 4 orientations = 320 actual GFX renders** are checked.
 The beta package contains `OLED_GALLERY.html` and a ZIP with native PNGs, metrics
 and an offline index. These show the final beta state; the historical 1.10
 before/after gallery below remains unchanged.

@@ -82,7 +82,8 @@ The web page is compressed in flash, with no framework, external font or separat
 ### Next: time first, more weather when you want it
 
 The **1.11 beta** adds a time-and-weather page, outdoor comfort, hourly rain
-probability, two-day min/max and UV, wind direction and a moon at night. Presets,
+probability, two-day min/max, a dedicated daytime UV peak page, wind direction
+and a moon at night. UV shows today, its level and tomorrow’s expected maximum. Presets,
 per-screen timing and optional night dimming keep these useful on a tiny screen.
 Home Assistant can send a room reading as a short card that expires automatically.
 The compact web panel gains import preview, city search and display controls.

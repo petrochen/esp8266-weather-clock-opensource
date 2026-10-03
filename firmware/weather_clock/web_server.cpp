@@ -125,7 +125,7 @@ void ICACHE_FLASH_ATTR handleAPIStatus() {
   displayInfo["night_dim"] = bool(featureSettings.night_action);
   displayInfo["screen"] = displayMode;
   displayInfo["paused"] = displayPaused;
-  for (uint8_t i = 0; i <= SCREEN_COUNT; ++i) displayInfo["available"].add(isModeEnabled(i));
+  for (uint8_t i = 0; i < DISPLAY_MODE_COUNT; ++i) displayInfo["available"].add(isModeEnabled(i));
   unitsInfo["temperature"] = featureSettings.temperature_unit;
   unitsInfo["wind"] = featureSettings.wind_unit;
   weatherInfo["enabled"] = config.weather_enabled;

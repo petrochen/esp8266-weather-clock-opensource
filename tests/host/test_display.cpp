@@ -46,7 +46,8 @@ WiFiConnectionState wifiConnState=WIFI_CONN_CONNECTED;
 void delay(unsigned long n){fakeMillis+=n;}
 unsigned long testEpoch=1791028800UL;
 unsigned long getAsyncEpoch(){return testEpoch;}
-long getTotalOffset(unsigned long){return 0;}
+long testOffset=0;
+long getTotalOffset(unsigned long){return testOffset;}
 bool isModeEnabled(uint8_t mode);
 void showConnected();
 #include "maintenance.cpp"
@@ -219,5 +220,29 @@ int main(){
   testEpoch=7*3600;updateDisplayRotation();assert(appliedBrightness==config.brightness);
   weather.isDay=false;weather.weathercode=0;displayWeather();assert(display.bitmap==weather_moon);
   weather.weathercode=61;displayWeather();assert(display.bitmap==weather_rain);
+  featureSettings.show_uv=1; featureSettings.screen_uv_sec=12; config.weather_enabled=true;
+  timeIsSynced=true;testEpoch=1791028800;weather.valid=true;weather.stale=false;forecast=ForecastData();
+  forecast.days[0].epoch=1790985600;forecast.days[0].uv=7.8f;
+  forecast.days[1].epoch=1791072000;forecast.days[1].uv=5.2f;
+  assert(isModeEnabled(UV_SCREEN) && forecastUV(0)==7.8f && forecastUV(1)==5.2f);
+  for(int value=0;value<=30;++value) {
+    const char* expected=value<3?"Low":value<6?"Moderate":value<8?"High":value<11?"Very high":"Extreme";
+    assert(!strcmp(uvLevel(value),expected));
+  }
+  displayExtra(UV_SCREEN);assert(display.lastText.find("Very high")!=std::string::npos);
+  assert(display.lastText.find("Tomorrow 5")!=std::string::npos);
+  assert(controlDisplay("show",UV_SCREEN));assert(displayMode==8 && displayPaused);
+  assert(controlDisplay("resume",-1));lastModeSwitch=fakeMillis;
+  fakeMillis+=11000;updateDisplayRotation();assert(displayMode==UV_SCREEN);
+  testEpoch=1791115200;assert(forecastUV(0)==5.2f && forecastUV(1)<0);
+  testEpoch=1791201600;assert(!isModeEnabled(UV_SCREEN));updateDisplayRotation();assert(displayMode==0);
+  testEpoch=1791028800;forecast.days[0].uv=-1;assert(forecastUV(0)<0 && forecastUV(1)==5.2f);
+  forecast.days[0].uv=0;assert(forecastUV(0)==0 && isModeEnabled(UV_SCREEN));
+  // Lisbon summer-day epochs begin at 23:00 UTC; local midnight selects the next day.
+  testOffset=3600;forecast.days[0].epoch=1790985600-3600;forecast.days[1].epoch=1791072000-3600;
+  testEpoch=1791072000-3601;assert(forecastUV(0)==0);
+  ++testEpoch;assert(forecastUV(0)==5.2f && forecastUV(1)<0);testOffset=0;
+  timeIsSynced=false;assert(!isModeEnabled(UV_SCREEN));timeIsSynced=true;
+  config.weather_enabled=false;assert(!isModeEnabled(UV_SCREEN));
   std::cout<<"PASS: contrast bounds, startup without pause, on-demand PIN expiry, offline placeholder, screen transitions, overlay expiry, static frames, dissolve endpoints\n";
 }
