@@ -1,5 +1,33 @@
 # Every OLED screen, before and after
 
+## README animations
+
+The [screen tour](../images/clock-demo.gif) holds each of nine pages for 2.4–3.8
+seconds. The [Wi-Fi demo](../images/wifi-demo.gif) cycles the three real connection
+frames, shows the connected screen, then the clock. They are composed from the
+same verified native PNGs as the gallery below, enlarged exactly 4× without
+smoothing. Only the frame and explanatory captions are added outside the OLED.
+These are synthetic demonstrations, not a recording or startup timing measurement.
+The gallery uses direct page changes; the firmware also supports dissolve.
+
+Both GIFs loop and total about 220 KB. For a still view, use the
+[screen poster](../images/clock-demo-poster.png),
+[Wi-Fi poster](../images/wifi-demo-poster.png) or the full static gallery.
+They are documentation assets and are not embedded in the firmware.
+
+To regenerate after updating the actual screen renders:
+
+```sh
+python3 tests/render_display.py --arduinojson /path/to/ArduinoJson/src \
+  --gfx /path/to/Adafruit_GFX_Library --output build/display-preview --sanitize
+python3 -m pip install Pillow==12.2.0
+python3 tools/make_readme_gifs.py --renders build/display-preview
+```
+
+The generator checks input clipping metrics, then decodes every GIF frame to
+verify exact OLED pixels, duration and loop metadata. It uses Pillow's bundled
+font for the surrounding captions, a fixed palette and no image-generation model.
+
 ## 1.11 beta gallery
 
 The prepared beta adds 29 scenarios for combined time/weather, outdoor comfort,

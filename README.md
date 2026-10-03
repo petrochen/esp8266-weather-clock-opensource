@@ -17,6 +17,11 @@
 
 I bought a cute weather clock kit from AliExpress ([TJ-56-654](https://pt.aliexpress.com/item/1005008333782531.html)) and discovered it was **leaking my WiFi password in plaintext** to anyone within radio range. So I ripped out the firmware, wrote my own, and ended up with a clock I could inspect, configure and update over WiFi. No weather API key required. No WiFi password on the settings page.
 
+[![Animated tour of the clock: time and weather, daytime UV, comfort, rain, daily forecast, wind, sun times and a Home Assistant card](images/clock-demo.gif)](docs/OLED_PREVIEWS.md)
+
+*An early look at the 1.11 beta, rendered by the firmware with sample data.
+[Still image](images/clock-demo-poster.png) · [All screens](docs/OLED_PREVIEWS.md).*
+
 **Want to use it?** Start with the [installation guide](docs/INSTALLATION.md), grab a published binary from [Releases](https://github.com/petrochen/esp8266-weather-clock-opensource/releases), or read [what's new in 1.10.0](docs/releases/v1.10.0.md). The last published stable release is **1.10.0**. This source tree prepares **[1.11.0-beta.1](docs/releases/v1.11.0-beta.1.md)**; its notes separate completed checks from hardware testing still to do.
 
 **Here for the story?** Read on.
@@ -88,8 +93,6 @@ per-screen timing and optional night dimming keep these useful on a tiny screen.
 Home Assistant can send a room reading as a short card that expires automatically.
 The compact web panel gains import preview, city search and display controls.
 
-[![Actual beta OLED screens](images/beta-oled-preview.png)](docs/releases/v1.11.0-beta.1.md)
-
 The beta is prepared locally, not yet published or hardware-validated. Existing
 settings and PINs are preserved; the new pages are opt-in. Details belong in the
 [beta notes](docs/releases/v1.11.0-beta.1.md) and [integration guide](docs/HOME_ASSISTANT.md).
@@ -125,6 +128,11 @@ For future release notifications, choose **Watch → Custom → Releases** on Gi
 **First installation:** use a **3.3V** USB-to-serial adapter and the [installation guide](docs/INSTALLATION.md). The build target is Generic ESP8266, **1MB / 64KB filesystem, DIO, 80MHz**. The ESP-01S itself is not 5V tolerant.
 
 After flashing, connect to **TJ56654-Setup** with the setup password `12345678`, then open `http://192.168.4.1` and choose your 2.4GHz WiFi network. Once connected, use the address shown by your router or `http://tj56654-clock.local/` where mDNS is available.
+
+![Wi-Fi demo: animated connection waves, the connected network and address, then the time-and-weather screen](images/wifi-demo.gif)
+
+*From connecting to the clock. Sample network details; demo timing is edited for
+readability, not a startup benchmark. [Still image](images/wifi-demo-poster.png).*
 
 **Already running this firmware?** Open `/update`, choose the clock's `.bin`, press **Show PIN on clock**, enter the six digits, then choose **Upload & restart**. The current installed version handles that first upload, so an older version can still require its existing login/code. The new page appears after the update.
 
