@@ -32,3 +32,4 @@ BACKLOG_*.md
 # Python test caches
 __pycache__/
 *.pyc
+node_modules/

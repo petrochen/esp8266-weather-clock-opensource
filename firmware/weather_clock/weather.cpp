@@ -6,9 +6,11 @@
 #include "globals.h"
 #include <ArduinoJson.h>
 #include <math.h>
+#include "bounded_json.h"
 
 static AsyncHTTPRequest weatherRequest;
 static bool weatherStarted = false;
+static constexpr size_t WEATHER_RESPONSE_LIMIT = 3072;
 
 static void ICACHE_FLASH_ATTR weatherFailed(const String& message) {
   // Keep the last good reading visible, but explicitly mark it stale.
@@ -22,42 +24,77 @@ static void ICACHE_FLASH_ATTR weatherFailed(const String& message) {
   invalidateDisplay();
 }
 
-static bool ICACHE_FLASH_ATTR parseSunTime(const char* value, char* text, int& minutes) {
-  if (!value || strlen(value) < 16 || value[10] != 'T' || value[13] != ':') return false;
-  const int positions[] = {11, 12, 14, 15};
-  for (int pos : positions) if (value[pos] < '0' || value[pos] > '9') return false;
-  int hour = (value[11] - '0') * 10 + value[12] - '0';
-  int minute = (value[14] - '0') * 10 + value[15] - '0';
-  if (hour > 23 || minute > 59) return false;
-  memcpy(text, value + 11, 5);
-  text[5] = '\0';
-  minutes = hour * 60 + minute;
-  return true;
+static bool ICACHE_FLASH_ATTR numberIn(JsonVariantConst value, float low, float high) {
+  return value.is<float>() && !value.is<bool>() && isfinite(value.as<float>()) &&
+    value.as<float>() >= low && value.as<float>() <= high;
+}
+
+static uint32_t ICACHE_FLASH_ATTR readEpoch(JsonVariantConst value) {
+  return value.is<uint32_t>() && value.as<uint32_t>() >= 1577836800UL &&
+    value.as<uint32_t>() < 4102444800UL ? value.as<uint32_t>() : 0;
+}
+
+uint32_t ICACHE_FLASH_ATTR weatherSourceAge() {
+  uint32_t elapsed = uint32_t(millis() - weather.lastUpdate) / 1000;
+  uint32_t now = getAsyncEpoch();
+  if (timeIsSynced && weather.sourceEpoch && now > weather.sourceEpoch && now - weather.sourceEpoch > elapsed)
+    return now - weather.sourceEpoch;
+  return elapsed;
+}
+
+void ICACHE_FLASH_ATTR refreshSunTimes() {
+  SunTimes next;
+  uint32_t now = getAsyncEpoch();
+  uint32_t day = (now + getTotalOffset(now)) / 86400;
+  for (const auto& item : forecast.days) {
+    if (!item.epoch || !item.sunrise || !item.sunset) continue;
+    if (timeIsSynced && (item.sunrise + getTotalOffset(item.sunrise)) / 86400 != day) continue;
+    next.sunriseMinutes = (item.sunrise + getTotalOffset(item.sunrise)) / 60 % 1440;
+    next.sunsetMinutes = (item.sunset + getTotalOffset(item.sunset)) / 60 % 1440;
+    snprintf(next.sunrise, sizeof(next.sunrise), "%02u:%02u", unsigned(next.sunriseMinutes / 60), unsigned(next.sunriseMinutes % 60));
+    snprintf(next.sunset, sizeof(next.sunset), "%02u:%02u", unsigned(next.sunsetMinutes / 60), unsigned(next.sunsetMinutes % 60));
+    next.lastDay = int((item.sunrise + getTotalOffset(item.sunrise)) / 86400);
+    break;
+  }
+  if (next.lastDay != sunTimes.lastDay || strcmp(next.sunrise, sunTimes.sunrise) || strcmp(next.sunset, sunTimes.sunset)) {
+    sunTimes = next;
+    invalidateDisplay();
+  }
+}
+
+static bool ICACHE_FLASH_ATTR responseWithinBudget(AsyncHTTPRequest* request) {
+  if (request->responseLength() <= WEATHER_RESPONSE_LIMIT && request->available() <= WEATHER_RESPONSE_LIMIT) return true;
+  weatherState = WEATHER_IDLE; // suppress synchronous abort callbacks
+  request->abort();
+  weatherFailed(F("Weather response too large"));
+  return false;
 }
 
 void ICACHE_FLASH_ATTR onWeatherResponse(void*, AsyncHTTPRequest* request, int readyState) {
-  if (readyState != 4 || weatherState != WEATHER_REQUESTING) return;
+  if (weatherState != WEATHER_REQUESTING || !responseWithinBudget(request) || readyState != 4) return;
   int code = request->responseHTTPcode();
   if (code != 200) {
     weatherFailed(String("Weather API: ") + code);
     return;
   }
 
-  JsonDocument doc;
+  BoundedJsonAllocator allocator;
+  JsonDocument doc(&allocator);
   String payload = request->responseText();
-  if (deserializeJson(doc, payload.c_str())) {
+  if (payload.length() > WEATHER_RESPONSE_LIMIT ||
+      deserializeJson(doc, payload.c_str(), DeserializationOption::NestingLimit(4))) {
     weatherFailed(F("Weather: invalid JSON"));
     return;
   }
-  JsonObject current = doc["current_weather"];
-  if (!current["temperature"].is<float>() || !current["windspeed"].is<float>() ||
-      !current["weathercode"].is<int>()) {
+  JsonObject current = doc["current"];
+  if (!numberIn(current["temperature_2m"], -100, 70) || !numberIn(current["wind_speed_10m"], 0, 500) ||
+      !current["weather_code"].is<int>() || !readEpoch(current["time"])) {
     weatherFailed(F("Weather: missing fields"));
     return;
   }
-  float temperature = current["temperature"];
-  float windspeed = current["windspeed"];
-  int codeValue = current["weathercode"];
+  float temperature = current["temperature_2m"];
+  float windspeed = current["wind_speed_10m"];
+  int codeValue = current["weather_code"];
   if (!isfinite(temperature) || !isfinite(windspeed) || temperature < -100 ||
       temperature > 70 || windspeed < 0 || codeValue < 0 || codeValue > 99) {
     weatherFailed(F("Weather: invalid values"));
@@ -67,17 +104,41 @@ void ICACHE_FLASH_ATTR onWeatherResponse(void*, AsyncHTTPRequest* request, int r
   weather.temperature = temperature;
   weather.windspeed = windspeed;
   weather.weathercode = codeValue;
+  weather.sourceEpoch = readEpoch(current["time"]);
+  weather.comfortValid = numberIn(current["apparent_temperature"], -120, 100);
+  weather.feelsLike = weather.comfortValid ? current["apparent_temperature"].as<float>() : 0;
+  weather.humidity = numberIn(current["relative_humidity_2m"], 0, 100) ? current["relative_humidity_2m"].as<int>() : -1;
+  weather.windDirection = numberIn(current["wind_direction_10m"], 0, 360) ? current["wind_direction_10m"].as<int>() : -1;
+  weather.isDay = current["is_day"].is<int>() ? current["is_day"].as<int>() != 0 : true;
   weather.lastUpdate = millis();
   weather.valid = true;
   weather.stale = false;
 
-  SunTimes nextSun;
-  if (parseSunTime(doc["daily"]["sunrise"][0], nextSun.sunrise, nextSun.sunriseMinutes) &&
-      parseSunTime(doc["daily"]["sunset"][0], nextSun.sunset, nextSun.sunsetMinutes)) {
-    time_t epoch = getAsyncEpoch();
-    nextSun.lastDay = timeIsSynced ? gmtime(&epoch)->tm_yday : 0;
+  ForecastData next;
+  for (uint8_t i = 0; i < 6; ++i) {
+    JsonObject hourly = doc["hourly"];
+    uint32_t epoch = readEpoch(hourly["time"][i]);
+    if (!epoch || !numberIn(hourly["temperature_2m"][i], -100, 70) ||
+        (next.count && epoch <= next.hours[next.count - 1].epoch)) continue;
+    auto& hour = next.hours[next.count++];
+    hour.epoch = epoch;
+    hour.temperature = hourly["temperature_2m"][i];
+    if (numberIn(hourly["precipitation_probability"][i], 0, 100)) hour.rain = hourly["precipitation_probability"][i].as<int>();
   }
-  sunTimes = nextSun;  // do not leave yesterday's sun times after a partial response
+  for (uint8_t i = 0; i < 2; ++i) {
+    JsonObject daily = doc["daily"];
+    auto& day = next.days[i];
+    day.epoch = readEpoch(daily["time"][i]);
+    day.sunrise = readEpoch(daily["sunrise"][i]); day.sunset = readEpoch(daily["sunset"][i]);
+    day.valid = day.epoch && numberIn(daily["temperature_2m_min"][i], -100, 70) && numberIn(daily["temperature_2m_max"][i], -100, 70);
+    if (day.valid) {
+      day.low = daily["temperature_2m_min"][i]; day.high = daily["temperature_2m_max"][i];
+      day.valid = day.low <= day.high;
+    }
+    if (numberIn(daily["uv_index_max"][i], 0, 30)) day.uv = daily["uv_index_max"][i];
+  }
+  forecast = next;
+  refreshSunTimes();
   weatherRetry.reset();
   weatherState = WEATHER_IDLE;
   lastError = "";
@@ -88,11 +149,14 @@ void ICACHE_FLASH_ATTR fetchWeatherAsync() {
   if (!config.weather_enabled || WiFi.status() != WL_CONNECTED ||
       weatherState != WEATHER_IDLE) return;
 
-  char url[240];
-  snprintf(url, sizeof(url),
+  char url[512];
+  int length = snprintf(url, sizeof(url),
     "http://api.open-meteo.com/v1/forecast?latitude=%.6f&longitude=%.6f"
-    "&current_weather=true&daily=sunrise,sunset&timezone=auto&forecast_days=1",
+    "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,is_day"
+    "&hourly=temperature_2m,precipitation_probability&daily=temperature_2m_min,temperature_2m_max,sunrise,sunset,uv_index_max"
+    "&timezone=auto&timeformat=unixtime&forecast_days=2&forecast_hours=6",
     config.latitude, config.longitude);
+  if (length < 0 || size_t(length) >= sizeof(url)) { weatherFailed(F("Weather URL too long")); return; }
 
   weatherStarted = true;
   lastWeatherUpdate = millis();
@@ -101,6 +165,9 @@ void ICACHE_FLASH_ATTR fetchWeatherAsync() {
   // Set state before open/send: callbacks can run synchronously on failure.
   weatherState = WEATHER_REQUESTING;
   weatherRequest.onReadyStateChange(onWeatherResponse);
+  weatherRequest.onData([](void*, AsyncHTTPRequest* request, size_t) {
+    if (weatherState == WEATHER_REQUESTING) responseWithinBudget(request);
+  });
   weatherRequest.setTimeout(10);
   if (!weatherRequest.open("GET", url) || !weatherRequest.send()) {
     if (weatherState == WEATHER_REQUESTING) weatherFailed(F("Weather: request failed"));
@@ -114,13 +181,16 @@ void ICACHE_FLASH_ATTR resetWeather() {
   weatherRetry.reset();
   weatherStarted = false;
   weather = WeatherData();
+  forecast = ForecastData();
   sunTimes = SunTimes();
   invalidateDisplay();
 }
 
 void ICACHE_FLASH_ATTR processWeather() {
+  refreshSunTimes();
   if (weather.valid && !weather.stale &&
-      uint32_t(millis() - weather.lastUpdate) >= config.weather_interval * 1000UL) {
+      (uint32_t(millis() - weather.lastUpdate) >= config.weather_interval * 1000UL ||
+       weatherSourceAge() > 7200 || (timeIsSynced && weather.sourceEpoch > getAsyncEpoch() + 3600))) {
     weather.stale = true;
     invalidateDisplay();
   }

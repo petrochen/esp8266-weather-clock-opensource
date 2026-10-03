@@ -10,6 +10,45 @@
 
 static bool displayDirty = true;
 static bool displaySleeping = false;
+static int appliedBrightness = -1;
+
+static float ICACHE_FLASH_ATTR displayTemperature(float value) {
+  return featureSettings.temperature_unit ? value * 1.8f + 32 : value;
+}
+
+static const char* ICACHE_FLASH_ATTR temperatureUnit() { return featureSettings.temperature_unit ? "°F" : "°C"; }
+
+static const uint8_t* ICACHE_FLASH_ATTR currentWeatherIcon() {
+  return !weather.isDay && weather.weathercode <= 2 && weather.weathercode >= 0 ? weather_moon : weatherIcon(weather.weathercode);
+}
+
+static void ICACHE_FLASH_ATTR applyBrightness(int level) {
+  level = level < 0 ? 0 : level > 7 ? 7 : level;
+  if (appliedBrightness == level) return;
+  display.ssd1306_command(SSD1306_SETCONTRAST);
+  display.ssd1306_command(32 + level * (255 - 32) / 7);
+  appliedBrightness = level;
+}
+
+bool ICACHE_FLASH_ATTR externalCardActive() {
+  return featureSettings.external_enabled && externalCard.ttl && uint32_t(millis() - externalCard.received) < externalCard.ttl;
+}
+
+static uint8_t ICACHE_FLASH_ATTR firstHour() {
+  uint8_t i = 0;
+  while (i < forecast.count && timeIsSynced && forecast.hours[i].epoch <= getAsyncEpoch()) ++i;
+  return i;
+}
+
+static uint8_t ICACHE_FLASH_ATTR firstDay() {
+  uint32_t now = getAsyncEpoch();
+  uint32_t today = (now + getTotalOffset(now)) / 86400;
+  for (uint8_t i = 0; i < 2; ++i) {
+    const auto& day = forecast.days[i];
+    if (day.valid && (!timeIsSynced || (day.epoch + getTotalOffset(day.epoch)) / 86400 >= today)) return i;
+  }
+  return 2;
+}
 
 void ICACHE_FLASH_ATTR wakeDisplay() {
   if (!displaySleeping) return;
@@ -24,14 +63,12 @@ void ICACHE_FLASH_ATTR invalidateDisplay() { displayDirty = true; }
 void ICACHE_FLASH_ATTR applyDisplaySettings() {
   // Legacy EEPROM may contain zero (previous firmware ignored brightness) or
   // values that bypassed form validation. Zero is a dim level, not screen-off.
-  const int level = config.brightness < 0 ? 0 : (config.brightness > 7 ? 7 : config.brightness);
-  const uint8_t contrast = 32 + level * (255 - 32) / 7;
   if (config.display_orientation > 3) config.display_orientation = 2;
   display.setRotation(config.display_orientation);
   display.setTextWrap(false);
   display.cp437(true);
-  display.ssd1306_command(SSD1306_SETCONTRAST);
-  display.ssd1306_command(contrast);
+  appliedBrightness = -1;
+  applyBrightness(config.brightness);
   invalidateDisplay();
 }
 
@@ -50,6 +87,21 @@ void ICACHE_FLASH_ATTR updateDisplay() {
     if (!config.hour_format_24) hours = hours % 12 ? hours % 12 : 12;
     char value[32];
     snprintf(value, sizeof(value), "%02d%c%02d", hours, colonBlink ? ':' : ' ', int((local / 60) % 60));
+    if (featureSettings.clock_weather && weather.valid) {
+      const bool portrait = display.width() < 100;
+      displayText(value, portrait ? 20 : 14, 24, portrait ? 2 : 3);
+      char temperature[20];
+      snprintf(temperature, sizeof(temperature), "%s%.0f%s", weather.stale ? "*" : "", displayTemperature(weather.temperature), temperatureUnit());
+      displayText(temperature, portrait ? 76 : 48, portrait ? 24 : 16, 2);
+      if (portrait) display.drawBitmap(24, 51, currentWeatherIcon(), 16, 16, SSD1306_WHITE);
+      else display.drawBitmap(0, 48, currentWeatherIcon(), 16, 16, SSD1306_WHITE);
+      if (!config.hour_format_24) displayText(pm ? "PM" : "AM", portrait ? 106 : 36, 8);
+      time_t calendar = local; struct tm* date = gmtime(&calendar);
+      snprintf(value, sizeof(value), "%02d.%02d", date->tm_mday, date->tm_mon + 1);
+      displayText(value, 0, 8);
+      if (!inTransition) display.display();
+      return;
+    }
     displayText(value, 0, footerTop(), 3);
     if (!config.hour_format_24) displayText(pm ? "PM" : "AM", footerTop() - 9, 8);
     time_t t = local;
@@ -75,13 +127,13 @@ void ICACHE_FLASH_ATTR displayWeather() {
     }
     displayFooter(config.city_name, 2);
     char value[16];
-    snprintf(value, sizeof(value), "%.1f", weather.temperature);
+    snprintf(value, sizeof(value), "%.1f", displayTemperature(weather.temperature));
     if (display.width() < 100) {
-      display.drawBitmap((display.width() - 16) / 2, 12, weatherIcon(weather.weathercode), 16, 16, SSD1306_WHITE);
+      display.drawBitmap((display.width() - 16) / 2, 12, currentWeatherIcon(), 16, 16, SSD1306_WHITE);
       displayText(value, 36, 24, 2);
-      displayText("°C", 64, 8);
+      displayText(temperatureUnit(), 64, 8);
     } else {
-      display.drawBitmap(0, 16, weatherIcon(weather.weathercode), 16, 16, SSD1306_WHITE);
+      display.drawBitmap(0, 16, currentWeatherIcon(), 16, 16, SSD1306_WHITE);
       uint8_t size = strlen(value) > 4 ? 2 : 3;
       int width = strlen(value) * 6 * size;
       // Reserve the 16px icon, a 6px gap, and 12px for the unit.
@@ -92,7 +144,7 @@ void ICACHE_FLASH_ATTR displayWeather() {
       display.print(value);
       display.setTextSize(1);
       drawDisplayGlyph(0xB0, x + width, y, 1);
-      drawDisplayGlyph('C', x + width + 6, y, 1);
+      drawDisplayGlyph(featureSettings.temperature_unit ? 'F' : 'C', x + width + 6, y, 1);
     }
   }
   if (!inTransition) display.display();
@@ -122,9 +174,119 @@ void ICACHE_FLASH_ATTR displaySunTimes() {
     }
     int minutes = sunTimes.sunsetMinutes - sunTimes.sunriseMinutes;
     snprintf(line, sizeof(line), "Day %dh %dm", minutes / 60, minutes % 60);
+    if (featureSettings.sun_countdown && timeIsSynced) {
+      uint32_t now = getAsyncEpoch();
+      uint32_t soonest = 0;
+      bool rising = false;
+      for (const auto& day : forecast.days) for (int event = 0; event < 2; ++event) {
+        uint32_t epoch = event ? day.sunset : day.sunrise;
+        if (epoch > now && (!soonest || epoch < soonest)) { soonest = epoch; rising = !event; }
+      }
+      if (soonest) snprintf(line, sizeof(line), "%s in %uh %um", rising ? "Rise" : "Set",
+                            unsigned((soonest - now) / 3600), unsigned((soonest - now) / 60 % 60));
+    }
     displayFooter(line);
   }
   if (!inTransition) display.display();
+}
+
+static void ICACHE_FLASH_ATTR displayExtra(uint8_t mode) {
+  display.clearDisplay();
+  const bool portrait = display.width() < 100;
+  char line[64];
+  const int body = portrait ? 24 : 17;
+  if (mode == SCREEN_COUNT) {
+    displayText(externalCard.title, 0, portrait ? 24 : 16);
+    displayText(externalCard.value, body + 4, portrait ? 56 : 24, 3);
+    displayFooter(externalCard.unit, 2);
+  } else if (mode == 3) {
+    displayText(weather.stale ? "Outdoor *" : "Outdoor", 0, 8);
+    snprintf(line, sizeof(line), "%.0f%s", displayTemperature(weather.temperature), temperatureUnit());
+    displayText(line, body, 24, 3);
+    if (weather.comfortValid) snprintf(line, sizeof(line), "Feels %.0f%s", displayTemperature(weather.feelsLike), temperatureUnit());
+    else strcpy(line, "Feels --");
+    displayText(line, portrait ? 60 : 44, portrait ? 24 : 8);
+    if (weather.humidity >= 0) snprintf(line, sizeof(line), "Humidity %d%%", weather.humidity);
+    else strcpy(line, "Humidity --");
+    displayFooter(line);
+  } else if (mode == 4) {
+    displayText(weather.stale ? "Rain *" : "Rain / %", 0, 8);
+    uint8_t start = firstHour();
+    for (uint8_t row = 0; row < 3 && start + row < forecast.count; ++row) {
+      const auto& hour = forecast.hours[start + row];
+      unsigned end = (hour.epoch + getTotalOffset(hour.epoch)) / 3600 % 24;
+      char chance[8] = "--";
+      if (hour.rain >= 0) snprintf(chance, sizeof(chance), "%d%%", hour.rain);
+      snprintf(line, sizeof(line), "%02u-%02u", (end + 23) % 24, end);
+      if (portrait) {
+        displayText(line, body + row * 28, 8);
+        displayText(chance, body + row * 28 + 9, 16, 2);
+      } else {
+        int y = 14 + row * 17;
+        display.setTextSize(1); display.setCursor(6, y + 4); display.print(line);
+        display.setTextSize(2); display.setCursor(120 - strlen(chance) * 12, y); display.print(chance);
+      }
+    }
+  } else if (mode == 5) {
+    snprintf(line, sizeof(line), "Min/max %s%s", temperatureUnit(), weather.stale ? " *" : "");
+    displayText(line, 0, portrait ? 16 : 8);
+    uint8_t start = firstDay();
+    for (uint8_t row = 0; row < 2 && start + row < 2; ++row) {
+      const auto& day = forecast.days[start + row];
+      if (!day.valid) continue;
+      time_t local = day.epoch + getTotalOffset(day.epoch); struct tm* date = gmtime(&local);
+      snprintf(line, sizeof(line), "%02d.%02d", date->tm_mday, date->tm_mon + 1);
+      if (portrait) displayText(line, body + row * 38, 8);
+      else { display.setTextSize(1); display.setCursor(2, 18 + row * 17); display.print(line); }
+      snprintf(line, sizeof(line), "%.0f/%.0f", displayTemperature(day.low), displayTemperature(day.high));
+      if (portrait) displayText(line, body + 10 + row * 38, 24, 2);
+      else {
+        uint8_t size = strlen(line) <= 7 ? 2 : 1;
+        display.setTextSize(size); display.setCursor(40 + (88 - strlen(line) * 6 * size) / 2, 14 + row * 17);
+        display.print(line);
+      }
+    }
+    if (start < 2 && forecast.days[start].uv >= 0) {
+      snprintf(line, sizeof(line), "UV max %.1f", forecast.days[start].uv);
+      displayFooter(line);
+    }
+  } else if (mode == 6) {
+    displayText(weather.stale ? "Wind *" : "Wind", 0, 8);
+    float speed = weather.windspeed;
+    const char* unit = "km/h";
+    if (featureSettings.wind_unit == 1) { speed /= 3.6f; unit = "m/s"; }
+    if (featureSettings.wind_unit == 2) { speed *= 0.621371f; unit = "mph"; }
+    snprintf(line, sizeof(line), "%.0f", speed); displayText(line, body, 24, 3);
+    const char* directions[] = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+    snprintf(line, sizeof(line), "%s %s", weather.windDirection < 0 ? "--" : directions[((weather.windDirection + 22) / 45) % 8], unit);
+    displayFooter(line, 2);
+  }
+  if (!inTransition) display.display();
+}
+
+static void ICACHE_FLASH_ATTR drawMode(uint8_t mode) {
+  switch (mode) {
+    case 0: updateDisplay(); break;
+    case 1: displayWeather(); break;
+    case 2: displaySunTimes(); break;
+    default: displayExtra(mode); break;
+  }
+}
+
+bool ICACHE_FLASH_ATTR controlDisplay(const char* action, int screen) {
+  if (!strcmp(action, "resume")) displayPaused = false;
+  else if (!strcmp(action, "hold")) displayPaused = true;
+  else if (!strcmp(action, "show")) {
+    if (screen < 0 || screen > SCREEN_COUNT || !isModeEnabled(uint8_t(screen))) return false;
+    displayMode = screen; displayPaused = true;
+  } else if (!strcmp(action, "next")) {
+    for (uint8_t i = 1; i <= SCREEN_COUNT + 1; ++i) {
+      uint8_t next = (displayMode + i) % (SCREEN_COUNT + 1);
+      if (isModeEnabled(next)) { displayMode = next; break; }
+    }
+  } else return false;
+  inTransition = false; lastModeSwitch = millis(); invalidateDisplay();
+  return true;
 }
 
 // Apply dissolve effect with optional drift (Thanos-style)
@@ -167,14 +329,19 @@ void ICACHE_FLASH_ATTR updateDisplayRotation() {
     ipDisplayUntil = 0;
     invalidateDisplay();
   }
-  if (isNightModeActive()) {
+  bool night = isNightModeActive();
+  if (night && !featureSettings.night_action) {
     if (!displaySleeping) display.ssd1306_command(SSD1306_DISPLAYOFF);
     displaySleeping = true;
     inTransition = false;
     return;
   }
   wakeDisplay();
-  unsigned long interval = config.display_rotation_sec * 1000UL;
+  applyBrightness(night ? featureSettings.night_brightness : config.brightness);
+  if (!isModeEnabled(displayMode)) { displayMode = 0; inTransition = false; invalidateDisplay(); }
+  if (inTransition && !isModeEnabled(nextDisplayMode)) { inTransition = false; invalidateDisplay(); }
+  unsigned long interval = (displayMode < SCREEN_COUNT && featureSettings.seconds[displayMode]
+    ? featureSettings.seconds[displayMode] : config.display_rotation_sec) * 1000UL;
 
   // Handle active dissolve transition (two phases)
   if (inTransition) {
@@ -211,24 +378,20 @@ void ICACHE_FLASH_ATTR updateDisplayRotation() {
       isDriftPhase = false;
     }
 
-    switch(currentMode) {
-      case 0: updateDisplay(); break;
-      case 1: displayWeather(); break;
-      case 2: displaySunTimes(); break;
-    }
+    drawMode(currentMode);
 
     applyDissolveEffect(hidePercent, isDriftPhase);
     return;
   }
 
   // Check if time to switch modes
-  if (now - lastModeSwitch > interval) {
+  if (!displayPaused && now - lastModeSwitch > interval) {
     uint8_t attempts = 0;
     nextDisplayMode = displayMode;
     do {
-      nextDisplayMode = (nextDisplayMode + 1) % 3;
+      nextDisplayMode = (nextDisplayMode + 1) % (SCREEN_COUNT + 1);
       attempts++;
-      if (attempts >= 3) {
+      if (attempts >= SCREEN_COUNT + 1) {
         nextDisplayMode = 0;
         Serial.println("WARNING: No display mode enabled, forcing time mode");
         break;
@@ -239,7 +402,8 @@ void ICACHE_FLASH_ATTR updateDisplayRotation() {
       lastModeSwitch = now;
       return;
     }
-    inTransition = true;
+    inTransition = featureSettings.dissolve;
+    if (!inTransition) { displayMode = nextDisplayMode; invalidateDisplay(); }
     transitionStart = now;
     lastModeSwitch = now;
     lastDissolveFrame = 0;
@@ -252,14 +416,11 @@ void ICACHE_FLASH_ATTR updateDisplayRotation() {
     displayMode = 0;
     displayDirty = true;
   }
-  if (!displayDirty && (displayMode != 0 || uint32_t(now - lastClockFrame) < 500)) return;
+  unsigned long refreshInterval = displayMode == 0 ? 500 : 60000;
+  if (!displayDirty && uint32_t(now - lastClockFrame) < refreshInterval) return;
   displayDirty = false;
   lastClockFrame = now;
-  switch(displayMode) {
-    case 0: updateDisplay(); break;
-    case 1: displayWeather(); break;
-    case 2: displaySunTimes(); break;
-  }
+  drawMode(displayMode);
 }
 
 // Check if display mode is enabled
@@ -268,6 +429,11 @@ bool ICACHE_FLASH_ATTR isModeEnabled(uint8_t mode) {
     case 0: return true;  // Time always enabled
     case 1: return config.show_weather && weather.valid;
     case 2: return config.show_sunrise_sunset && sunTimes.lastDay != -1;
+    case 3: return featureSettings.show_comfort && weather.valid;
+    case 4: return featureSettings.show_rain && firstHour() < forecast.count;
+    case 5: return featureSettings.show_daily && firstDay() < 2;
+    case 6: return featureSettings.show_wind && weather.valid;
+    case SCREEN_COUNT: return externalCardActive();
   }
   return false;
 }

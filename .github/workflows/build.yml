@@ -7,6 +7,11 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
       - uses: arduino/setup-arduino-cli@v2
         with:
           version: 1.4.1
@@ -28,6 +33,7 @@ jobs:
           python3 -m pip install playwright==1.58.0
           python3 -m playwright install --with-deps chromium
           python3 tests/test_web.py
+          python3 tests/test_portal.py --wifimanager "$HOME/Arduino/libraries/WiFiManager"
       - name: Compile ESP-01S 1 MB
         run: arduino-cli compile --fqbn esp8266:esp8266:generic:eesz=1M64,FlashMode=dio,xtal=80 --warnings all --build-path build firmware/weather_clock
       - name: Check flash and instruction memory budgets

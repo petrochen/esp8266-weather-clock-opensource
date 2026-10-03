@@ -58,12 +58,38 @@ static void setCity(const char* name) {
  assert(strlen(name) < sizeof(config.city_name));
  strcpy(config.city_name, name);
 }
+static void sampleForecast() {
+ for (int i=0;i<6;++i) { forecast.hours[i].epoch=(testEpoch/3600+1+i)*3600;forecast.hours[i].rain=i*20;forecast.hours[i].temperature=22-i; }
+ forecast.count=6;
+ for (int i=0;i<2;++i) { auto& d=forecast.days[i];d.epoch=(testEpoch/86400+i)*86400;d.low=16-i;d.high=23-i;d.uv=4.2f;d.valid=true;d.sunrise=d.epoch+7*3600;d.sunset=d.epoch+19*3600; }
+}
 int main(int argc,char** argv){
  int failures=0;
  if(argc!=2)return 2;std::filesystem::create_directories(argv[1]);
  ESP.nextValue=123456;setupMaintenance();
  struct Case{const char* name;std::function<void()> draw;};
  std::vector<Case> cases={
+  {"combined",[]{featureSettings.clock_weather=1;updateDisplay();}},
+  {"combined-12h",[]{featureSettings.clock_weather=1;config.hour_format_24=false;updateDisplay();}},
+  {"combined-fahrenheit",[]{featureSettings.clock_weather=1;featureSettings.temperature_unit=1;weather.temperature=-100;weather.stale=true;updateDisplay();}},
+  {"combined-portrait-night",[]{featureSettings.clock_weather=1;weather.isDay=false;weather.weathercode=0;updateDisplay();}},
+  {"comfort",[]{weather.comfortValid=true;weather.feelsLike=19;weather.humidity=68;displayExtra(3);}},
+  {"comfort-missing",[]{weather.comfortValid=false;weather.humidity=-1;displayExtra(3);}},
+  {"comfort-extreme",[]{weather.comfortValid=true;weather.feelsLike=-120;featureSettings.temperature_unit=1;weather.temperature=-100;weather.humidity=100;displayExtra(3);}},
+  {"rain",[]{sampleForecast();displayExtra(4);}},
+  {"rain-100",[]{sampleForecast();for(auto& hour:forecast.hours)hour.rain=100;displayExtra(4);}},
+  {"rain-missing",[]{sampleForecast();forecast.hours[0].rain=-1;displayExtra(4);}},
+  {"rain-midnight",[]{testEpoch=(testEpoch/86400)*86400+23*3600;sampleForecast();displayExtra(4);}},
+  {"daily",[]{sampleForecast();displayExtra(5);}},
+  {"daily-extreme",[]{sampleForecast();featureSettings.temperature_unit=1;forecast.days[0].low=-100;forecast.days[0].high=70;displayExtra(5);}},
+  {"wind",[]{weather.windspeed=26;weather.windDirection=315;displayExtra(6);}},
+  {"wind-ms",[]{weather.windspeed=26;weather.windDirection=270;featureSettings.wind_unit=1;displayExtra(6);}},
+  {"wind-mph",[]{weather.windspeed=500;weather.windDirection=-1;featureSettings.wind_unit=2;displayExtra(6);}},
+  {"moon",[]{weather.weathercode=0;weather.isDay=false;displayWeather();}},
+  {"sun-countdown",[]{sampleForecast();featureSettings.sun_countdown=1;displaySunTimes();}},
+  {"external-card",[]{strcpy(externalCard.title,"Living room CO2");strcpy(externalCard.value,"920");strcpy(externalCard.unit,"ppm");displayExtra(SCREEN_COUNT);}},
+  {"external-card-long",[]{strcpy(externalCard.title,"A very long name with 31 chars!");strcpy(externalCard.value,"123456789012345");strcpy(externalCard.unit,"12345678901");displayExtra(SCREEN_COUNT);}},
+  {"night-dim",[]{nightSettings.enabled=1;featureSettings.night_action=1;testEpoch=23*3600;updateDisplayRotation();}},
   {"startup",[]{showStartupAnimation();}},
   {"connecting",[]{showWiFiConnecting(2);}},
   {"connecting-start",[]{showWiFiConnecting(0);}},
@@ -118,6 +144,7 @@ int main(int argc,char** argv){
  };
  for(int rotation:{0,1,2,3})for(auto& item:cases){
   config=Config{};config.display_orientation=rotation;nightSettings=NightSettings{};
+  featureSettings=FeatureSettings();forecast=ForecastData();externalCard=ExternalCard();displayPaused=false;weather=WeatherData();
   weather.valid=true;weather.stale=false;weather.temperature=22.4;weather.weathercode=3;
   sunTimes.lastDay=1;strcpy(sunTimes.sunrise,"07:31");strcpy(sunTimes.sunset,"19:14");sunTimes.sunriseMinutes=451;sunTimes.sunsetMinutes=1154;
   wifiConnState=WIFI_CONN_CONNECTED;WiFi.ssid="Home WiFi";WiFi.ip.value=0x7b01a8c0;

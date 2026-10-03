@@ -143,3 +143,83 @@ bool nightModeAt(const NightSettings& night, unsigned long localEpoch, bool sync
   // Equal endpoints disable the window; an unsynced clock always stays visible.
   return start > end ? minute >= start || minute < end : minute >= start && minute < end;
 }
+
+static const char* const screenKeys[SCREEN_COUNT] = {
+  "screen_clock_sec", "screen_weather_sec", "screen_sun_sec", "screen_comfort_sec",
+  "screen_rain_sec", "screen_daily_sec", "screen_wind_sec"
+};
+
+struct FeatureField {
+  const char* name;
+  uint8_t FeatureSettings::* member;
+  uint8_t maximum; // 0 denotes a boolean
+};
+static const FeatureField featureFields[] = {
+  {"temperature_unit", &FeatureSettings::temperature_unit, 1},
+  {"wind_unit", &FeatureSettings::wind_unit, 2},
+  {"night_action", &FeatureSettings::night_action, 1},
+  {"night_brightness", &FeatureSettings::night_brightness, 7},
+  {"clock_weather", &FeatureSettings::clock_weather, 0},
+  {"dissolve", &FeatureSettings::dissolve, 0},
+  {"external_enabled", &FeatureSettings::external_enabled, 0},
+  {"sun_countdown", &FeatureSettings::sun_countdown, 0},
+  {"show_comfort", &FeatureSettings::show_comfort, 0},
+  {"show_rain", &FeatureSettings::show_rain, 0},
+  {"show_daily", &FeatureSettings::show_daily, 0},
+  {"show_wind", &FeatureSettings::show_wind, 0}
+};
+
+bool ICACHE_FLASH_ATTR updateFeatureSettings(FeatureSettings& target, JsonObjectConst values, const char*& error) {
+  FeatureSettings next = target;
+  for (uint8_t i = 0; i < SCREEN_COUNT; ++i) {
+    if (values[screenKeys[i]].isUnbound()) continue;
+    double number;
+    if (!readNumber(values[screenKeys[i]], number) || floor(number) != number || number < 0 || number > 120) {
+      error = "Screen duration must be 0..120 seconds"; return false;
+    }
+    next.seconds[i] = number;
+  }
+  for (const auto& field : featureFields) {
+    JsonVariantConst value = values[field.name];
+    if (value.isUnbound()) continue;
+    if (field.maximum) {
+      double number;
+      if (!readNumber(value, number) || floor(number) != number || number < 0 || number > field.maximum) {
+        error = "Invalid display option"; return false;
+      }
+      next.*(field.member) = number;
+    } else {
+      bool flag;
+      if (!readBool(value, flag)) { error = "Expected a display option boolean"; return false; }
+      next.*(field.member) = flag;
+    }
+  }
+  target = next;
+  return true;
+}
+
+void ICACHE_FLASH_ATTR exportFeatureSettings(const FeatureSettings& source, JsonDocument& doc) {
+  for (uint8_t i = 0; i < SCREEN_COUNT; ++i) doc[screenKeys[i]] = source.seconds[i];
+  for (const auto& field : featureFields) {
+    if (field.maximum) doc[field.name] = source.*(field.member);
+    else doc[field.name] = bool(source.*(field.member));
+  }
+}
+
+bool ICACHE_FLASH_ATTR updateExternalCard(ExternalCard& target, JsonObjectConst values, uint32_t now, const char*& error) {
+  ExternalCard next;
+  double ttl;
+  if (!readNumber(values["ttl"], ttl) || floor(ttl) != ttl || ttl < 0 || ttl > 3600) {
+    error = "TTL must be 0..3600 seconds"; return false;
+  }
+  if (ttl == 0) { target = next; return true; }
+  if (ttl < 5 || !copyField(values, "title", next.title, sizeof(next.title), false) ||
+      !copyField(values, "value", next.value, sizeof(next.value), false) ||
+      (!values["unit"].isUnbound() && !copyField(values, "unit", next.unit, sizeof(next.unit), true))) {
+    error = "Use title <=31 bytes, value <=15, unit <=11 and TTL >=5"; return false;
+  }
+  next.received = now;
+  next.ttl = uint32_t(ttl) * 1000;
+  target = next;
+  return true;
+}

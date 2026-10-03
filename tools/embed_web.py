@@ -3,6 +3,8 @@
 import argparse
 import gzip
 import hashlib
+import json
+import subprocess
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
@@ -10,8 +12,9 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--check', action='store_true')
 args = parser.parse_args()
 html = (root / 'web/index.html').read_text()
-html = html.replace('/* INLINE_CSS */', (root / 'web/app.css').read_text())
-html = html.replace('/* INLINE_JS */', (root / 'web/app.js').read_text())
+assets = json.loads(subprocess.check_output(['node', str(root / 'tools/minify_web.cjs')], text=True))
+html = html.replace('/* INLINE_CSS */', assets['css'])
+html = html.replace('/* INLINE_JS */', assets['js'])
 data = gzip.compress(html.encode(), compresslevel=9, mtime=0)
 # Python 3.11/3.12 can delegate mtime=0 to zlib, which writes a platform-specific
 # OS byte. Canonicalize it to "unknown" (255), as newer Python versions do.

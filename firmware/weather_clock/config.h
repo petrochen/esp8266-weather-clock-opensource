@@ -10,7 +10,7 @@
 #include "runtime_logic.h"
 
 // Firmware version
-#define FIRMWARE_VERSION "1.10.0"
+#define FIRMWARE_VERSION "1.11.0-beta.1"
 
 // OLED I2C Configuration
 #define I2C_SDA 0  // GPIO0 (I2C Data) - SWAPPED!
@@ -58,6 +58,42 @@ struct NightSettings {
   uint8_t start_hour = 23, start_minute = 0;
   uint8_t end_hour = 7, end_minute = 0;
   uint8_t reserved[3] = {}; // Explicit bytes instead of uninitialized struct padding.
+};
+
+// Separate record: old firmware can still read Config and NightSettings.
+constexpr uint16_t FEATURE_SETTINGS_ADDR = 432;
+constexpr uint32_t FEATURE_SETTINGS_MAGIC = 0x46545231; // FTR1
+constexpr uint8_t SCREEN_COUNT = 7;
+struct FeatureSettings {
+  uint32_t magic = FEATURE_SETTINGS_MAGIC;
+  uint8_t seconds[SCREEN_COUNT] = {}; // zero inherits the legacy interval
+  uint8_t clock_weather = 0, dissolve = 1;
+  uint8_t temperature_unit = 0, wind_unit = 0; // C/F; km/h, m/s, mph
+  uint8_t night_action = 0, night_brightness = 0; // off/dim
+  uint8_t external_enabled = 0, sun_countdown = 0;
+  uint8_t show_comfort = 0, show_rain = 0, show_daily = 0, show_wind = 0;
+  uint8_t reserved[9] = {};
+};
+static_assert(sizeof(FeatureSettings) == 32, "Stable feature record layout");
+
+struct ForecastHour {
+  uint32_t epoch = 0;
+  float temperature = 0;
+  int16_t rain = -1; // unavailable is distinct from 0%
+};
+struct ForecastDay {
+  uint32_t epoch = 0, sunrise = 0, sunset = 0;
+  float low = 0, high = 0, uv = -1;
+  bool valid = false;
+};
+struct ForecastData {
+  ForecastHour hours[6];
+  ForecastDay days[2];
+  uint8_t count = 0;
+};
+struct ExternalCard {
+  char title[32] = {}, value[16] = {}, unit[12] = {};
+  uint32_t received = 0, ttl = 0;
 };
 
 // WiFi retry configuration - infinite retries with longer backoff
@@ -117,8 +153,12 @@ enum WiFiConnectionState {
 struct WeatherData {
   float temperature = 0.0;
   int weathercode = -1;  // WMO weather code
-  int humidity = 0;
+  int humidity = -1;
   float windspeed = 0.0;
+  float feelsLike = 0.0;
+  bool comfortValid = false, isDay = true;
+  int windDirection = -1;
+  uint32_t sourceEpoch = 0;
   unsigned long lastUpdate = 0;
   bool valid = false;
   bool stale = true;

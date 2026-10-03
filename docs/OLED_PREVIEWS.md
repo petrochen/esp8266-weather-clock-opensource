@@ -1,5 +1,21 @@
 # Every OLED screen, before and after
 
+## 1.11 beta gallery
+
+The prepared beta adds 21 scenarios for combined time/weather, outdoor comfort,
+rain, daily min/max/UV, wind units/direction, moon, sun countdown, external cards
+and dimming, including missing/extreme values. Together with the 51 existing
+cases, **72 scenarios × 4 orientations = 288 actual GFX renders** are checked.
+The beta package contains `OLED_GALLERY.html` and a ZIP with native PNGs, metrics
+and an offline index. These show the final beta state; the historical 1.10
+before/after gallery below remains unchanged.
+
+[![Selected beta OLED screens](../images/beta-oled-preview.png)](../images/beta-oled-preview.png)
+
+Pixel layouts are checked with the production drawing code and pinned GFX font.
+They do not substitute for physical checks of OLED brightness, color bands or I²C.
+
+
 The refreshed **v1.10.0** keeps the original release number and replaces its first
 build, `5ae2387ac626`. These are pixels drawn by the firmware with the actual
 Adafruit_GFX 1.12.4 rasterizer and font, using synthetic data. There are **51

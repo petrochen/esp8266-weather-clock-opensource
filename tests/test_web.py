@@ -5,6 +5,7 @@ No device is contacted. Requires playwright==1.58.0 and its Chromium browser.
 import argparse
 from copy import deepcopy
 import json
+import gzip
 from pathlib import Path
 import re
 from playwright.sync_api import sync_playwright
@@ -13,7 +14,8 @@ root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--screenshots', type=Path)
 args = parser.parse_args()
-html = (root / 'web/index.html').read_text().replace('/* INLINE_CSS */', (root / 'web/app.css').read_text()).replace('/* INLINE_JS */', (root / 'web/app.js').read_text())
+header = (root / 'firmware/weather_clock/web_assets.h').read_text()
+html = gzip.decompress(bytes(int(value, 16) for value in re.findall(r'0x([0-9a-f]{2})', header))).decode()
 version = re.search(r'FIRMWARE_VERSION "([^"]+)"', (root / 'firmware/weather_clock/config.h').read_text()).group(1)
 status = dict(wifi=dict(hostname='living-room-clock', ip='192.168.2.149', rssi=-58),
               time=dict(epoch=1791031680, offset=3600, ntp_synced=True, hour_format_24=True),
@@ -25,6 +27,13 @@ config = dict(firmware_version=version, ssid='Home', hostname='living-room-clock
               latitude=37.19, longitude=-8.54, city_name='Portimão', weather_enabled=True, weather_interval=1800,
               display_rotation_sec=5, display_orientation=2, show_weather=True, show_sunrise_sunset=True,
               night_enabled=False, night_start_hour=23, night_start_minute=0, night_end_hour=7, night_end_minute=0)
+config.update(clock_weather=False, dissolve=True, temperature_unit=0, wind_unit=0, night_action=0, night_brightness=0,
+              external_enabled=False, sun_countdown=False, show_comfort=False, show_rain=False, show_daily=False, show_wind=False)
+config.update({'screen_' + key + '_sec': 0 for key in ['clock', 'weather', 'sun', 'comfort', 'rain', 'daily', 'wind']})
+status['display'].update(screen=0, paused=False, available=[True, True, True, False, False, False, False, False])
+status['units'] = dict(temperature=0, wind=0)
+status['weather'].update(comfort_valid=True, feels_like=21.2, humidity=68, wind_direction=270, is_day=True, source_epoch=1791031500)
+status['forecast'] = dict(hours=[dict(epoch=1791036000, temperature=22, rain=60)], days=[dict(epoch=1790985600, low=16, high=23, uv=4.2, valid=True)])
 calls = []
 updates = []
 pins = []
@@ -37,7 +46,9 @@ def route_request(route):
     path = request.url.removeprefix('http://clock.test')
     calls.append((request.method, path))
     headers = request.headers
-    if path in ('/', '/config', '/debug', '/update') and request.method == 'GET':
+    if request.url.startswith('https://geocoding-api.open-meteo.com/'):
+        route.fulfill(json={'results': [dict(name='Portimão', latitude=37.14, longitude=-8.53, country='Portugal')]})
+    elif path in ('/', '/config', '/debug', '/update') and request.method == 'GET':
         route.fulfill(status=200, content_type='text/html', body=html)
     elif path == '/api/status':
         route.fulfill(json=api_status)
@@ -55,6 +66,13 @@ def route_request(route):
                 route.fulfill(json={'status': 'ok', 'restart': False})
         else:
             route.fulfill(json=config)
+    elif path == '/api/display':
+        values = request.post_data_json
+        if values['action'] == 'hold': api_status['display']['paused'] = True
+        elif values['action'] == 'resume': api_status['display']['paused'] = False
+        elif values['action'] == 'show': api_status['display'].update(screen=values['screen'], paused=True)
+        elif values['action'] == 'next': api_status['display']['screen'] = (api_status['display']['screen'] + 1) % 3
+        route.fulfill(json={'status': 'ok'})
     elif path == '/maintenance/pin':
         route.fulfill(json={'status': 'shown', 'seconds': 30})
     elif path in ('/api/maintenance/verify', '/api/reboot', '/api/eeprom-clear', '/update'):
@@ -125,10 +143,10 @@ with sync_playwright() as p:
     page.locator('#settings-fields:not([disabled])').wait_for()
     assert page.locator('#save-settings').is_disabled()
     assert page.locator('#discard-settings').is_disabled()
-    # Every setting and the Save action fits a common laptop viewport without scrolling.
+    # Basic controls and Save fit on a laptop; advanced controls are disclosed on demand.
     for width, height in [(1280, 800), (1366, 768)]:
         page.set_viewport_size({'width': width, 'height': height})
-        assert page.evaluate('''() => [...document.querySelectorAll('#settings-fields input, #settings-fields select, #save-settings')].every(el => {
+        assert page.evaluate('''() => [...document.querySelectorAll('#settings-fields > .settings-section input, #settings-fields > .settings-section select, #save-settings')].filter(el => !el.closest('.city-search')).every(el => {
           const rect = el.getBoundingClientRect();
           return rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight;
         })''')
@@ -259,6 +277,63 @@ with sync_playwright() as p:
     assert page.evaluate('localStorage.length + sessionStorage.length') == 0
     assert not any('123456' in url or '123-456' in url for _, url in calls)
     assert context.cookies() == []
+    # New controls use explicit API actions and keep the weather's canonical units.
+    api_status.update(deepcopy(status))
+    open_page('/')
+    page.locator('#screen-hold').click()
+    page.locator('#screen-hold').filter(has_text='Resume rotation').wait_for()
+    page.locator('#active-screen').select_option('1')
+    page.locator('#screen-result').filter(has_text='selected and held').wait_for()
+    assert api_status['display']['screen'] == 1 and api_status['display']['paused']
+    page.locator('#screen-hold').click()
+    page.locator('#screen-hold').filter(has_text='Hold').wait_for()
+    page.locator('.forecast-panel summary').click()
+    assert '60%' in page.locator('#hourly-forecast').inner_text()
+    assert '4.2' in page.locator('#daily-forecast').inner_text()
+    api_status['units'] = dict(temperature=1, wind=1)
+    page.locator('#refresh').click()
+    page.locator('#weather-unit').filter(has_text='°F').wait_for()
+    assert page.locator('#weather-temp').inner_text() == '72.3'
+    assert 'm/s' in page.locator('#weather-wind').inner_text()
+    screenshot('forecast-desktop')
+    with page.expect_download() as download_info:
+        page.locator('#download-diagnostics').evaluate('el => el.click()')
+    report = json.loads(Path(download_info.value.path()).read_text())
+    assert report['firmware'] == version
+    assert not any(key in report for key in ('ssid', 'ip', 'hostname', 'chip_id', 'password', 'pin', 'city', 'latitude'))
+    open_page('/config')
+    page.locator('#settings-fields:not([disabled])').wait_for()
+    before_updates = len(updates)
+    page.locator('#wifi-password').fill('pending-secret')
+    page.locator('#screen-preset').select_option('weather')
+    assert page.locator('[name=clock_weather]').is_checked()
+    assert page.locator('[name=show_rain]').is_checked()
+    assert page.locator('#wifi-password').input_value() == 'pending-secret'
+    page.locator('#discard-settings').click()
+    assert not page.locator('[name=show_rain]').is_checked()
+    page.locator('#import-file').set_input_files({'name': 'settings.json', 'mimeType': 'application/json',
+        'buffer': json.dumps(dict(clock_weather=True, show_rain=True, screen_clock_sec=30, password='ignore-this-secret')).encode()})
+    page.locator('#import-dialog[open]').wait_for()
+    assert 'ignore-this-secret' not in page.locator('#import-preview').inner_text()
+    assert len(updates) == before_updates
+    page.locator('#apply-import').click()
+    assert page.locator('[name=clock_weather]').is_checked()
+    assert page.locator('#wifi-password').input_value() == '' and len(updates) == before_updates
+    page.locator('.extra-settings summary').click()
+    assert page.locator('[name=screen_clock_sec]').input_value() == '30'
+    page.locator('#save-settings').click()
+    page.locator('#settings-result').filter(has_text='Saved.').wait_for()
+    assert updates[-1] == dict(clock_weather=True, show_rain=True, screen_clock_sec=30)
+    screenshot('advanced-settings-desktop')
+    page.locator('.city-search summary').click()
+    page.locator('#city-query').fill('Portimao')
+    page.locator('#city-search').click()
+    page.locator('#city-results button').click()
+    assert page.locator('#latitude').input_value() == '37.14'
+    assert page.locator('#city').input_value() == 'Portimão'
+    assert len(updates) == before_updates + 1
+    page.locator('#discard-settings').click()
+    api_status.update(deepcopy(status))
     # No overflow on narrow phones, with the same real HTML/CSS/JS.
     for width in (320, 390, 640, 768, 900):
         # 640×400 also exercises the reflow viewport of a 1280×800 screen at 200% zoom.
@@ -269,12 +344,14 @@ with sync_playwright() as p:
             if width == 390: screenshot(name + '-mobile')
             if path == '/config' and width in (320, 640):
                 page.locator('#settings-fields:not([disabled])').wait_for()
-                page.locator('#brightness').focus()
+                page.locator('#settings-fields details').evaluate_all('items => items.forEach(el => el.open = true)')
+                page.locator('#screen-preset').focus()
                 reached = set()
                 for _ in range(80):
                     if not page.evaluate("document.querySelector('#settings-fields').contains(document.activeElement)"):
                         break
-                    reached.add(page.evaluate('document.activeElement.name'))
+                    if page.evaluate('document.activeElement.matches("input, select")'):
+                        reached.add(page.evaluate('document.activeElement.id || document.activeElement.name'))
                     # Focused fields must scroll above the sticky Save bar, not underneath it.
                     focus = page.evaluate('''() => {
                       const rect = document.activeElement.getBoundingClientRect();
@@ -286,4 +363,4 @@ with sync_playwright() as p:
                 assert len(reached) == page.locator('#settings-fields input, #settings-fields select').count(), reached
     assert not errors, errors
     browser.close()
-print('PASS: compact desktop/mobile UI, all settings visible at 1280×800 and 1366×768, keyboard controls, dirty/discard/retry, settings round-trip, hidden-tab polling, stale/unsynced/escaped data, PIN-only maintenance, empty upload, preflight auth, core upload errors, no credential storage, no overflow')
+print('PASS: minified embedded UI, basic settings fit laptop, advanced controls accessible, dirty/discard/retry/import/presets, forecast/units/display control, hidden-tab polling, PIN/update guards, no credential storage or overflow')

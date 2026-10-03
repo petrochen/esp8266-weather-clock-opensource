@@ -1,7 +1,41 @@
 # Using Your Weather Clock
 
+## Trying the 1.11 beta
+
+The source tree now targets **1.11.0-beta.1**; the sections below also describe the
+compatible stable controls. Start with Settings → **Time & weather** → Save for a
+large clock with a weather footer. **Clock only** hides weather pages;
+**Detailed weather** enables the extra pages. Presets stage changes before Save
+and keep unrelated unsaved settings. Discard restores the saved configuration.
+
+Expand **More display options** for per-page durations (0 inherits the common
+interval), feels-like/humidity, rain probability, daily min/max/UV, wind, units,
+sun countdown, dissolve and external cards. Each forecast value comes from the
+weather provider; humidity is outdoors, not a measurement inside your room.
+Night mode can now dim to a separate brightness instead of turning the OLED off.
+All of this is optional: an upgrade preserves the previous display choices.
+
+On the Clock page, choose an available screen to hold it, or use Next / Hold /
+Resume. A held external card expires normally. Night schedules and temporary PIN
+screens override these controls. Hold is not saved across restart.
+
+**Import settings** reads a local JSON export (at most 8 KB), previews known fields
+and stages them in the form. Click Save to apply. Password/PIN fields from the file
+are ignored; a password you have already typed into the form is preserved.
+**Find city** searches Open-Meteo from your browser and stages coordinates. Pick
+the timezone explicitly. A place name longer than the existing 31-byte UTF-8
+storage limit needs a shorter display label; it is never silently saved truncated.
+
+Expand weather details for six hourly slots and two daily forecasts. The rain OLED
+page shows the next three available slots; it does not predict minute-by-minute
+rain. “Fetched” age and source reading age are separate. Missing fields use a
+placeholder; stale readings remain marked. Download diagnostics from Device
+details to share a report without network identifiers, location or credentials.
+For room readings, see [Home Assistant](HOME_ASSISTANT.md).
+
+
 Once the clock is on WiFi, open its IP address or `http://tj56654-clock.local/`
-where mDNS is available. This guide describes the 1.10.0 interface. For the first
+where mDNS is available. The base controls are shared with 1.10.0. For the first
 flash or recovery, see [Installation](INSTALLATION.md).
 
 ## Clock

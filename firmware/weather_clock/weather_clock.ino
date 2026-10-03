@@ -86,6 +86,10 @@ bool internetConnected = false;
 // Weather and sun data
 WeatherData weather;
 SunTimes sunTimes;
+FeatureSettings featureSettings;
+ForecastData forecast;
+ExternalCard externalCard;
+bool displayPaused = false;
 
 // Display rotation state
 uint8_t displayMode = 0;
@@ -272,6 +276,7 @@ void setup() {
   // Apply persisted orientation/brightness before the first rendered frame.
   loadConfig();
   loadNightSettings();
+  loadFeatureSettings();
   applyDisplaySettings();
   showStartupAnimation();
 

@@ -1,5 +1,38 @@
 # Build, validation and upgrade notes
 
+## Prepared 1.11.0-beta.1 results
+
+Local checks completed on 2026-10-03 using the pinned toolchain below:
+
+| Check | Result |
+| --- | --- |
+| ESP-01S binary | **477,600 bytes**, below the conservative 479,232-byte OTA budget by **1,632 bytes** |
+| Static RAM | **38,916 bytes**, below the 45,000-byte project budget |
+| Instruction region including 32 KB cache | **62,007 / 65,536 bytes** (94.62%, below 95%) |
+| Embedded web page | 51,110 bytes before gzip, **14,890 bytes** in flash after minification/gzip |
+| Host regressions | Passed, including feature EEPROM isolation, atomic validation, source age, parser allocation exhaustion, optional/misaligned forecast arrays, screen timing and card expiry |
+| Actual OLED raster | **288 renders**, zero automatic wraps/clipped cells/clipped ink; ASan/UBSan passed |
+| Chromium against embedded minified UI | Passed desktop/mobile, import preview, presets, dirty-state preservation, forecast/units/control, hidden-tab polling and PIN/upload guards |
+| Compact setup portal | Upstream templates/scripts tested at 320 px, including 32-character wide SSID, open/locked selection and password visibility |
+| Home Assistant example | YAML and 10 Jinja templates parsed; rendered REST command bodies are valid JSON |
+| Live provider sample | Public-coordinate Open-Meteo response: 1,213 bytes, 6 hours/2 days; parsed by the production module in the host harness |
+| Reproducibility checks | Clean pinned npm installation, regenerated header matches, JS/Python syntax and diff whitespace checks passed |
+
+The binary was built in an isolated Linux ARM container from a frozen source
+snapshot, with Arduino CLI 1.4.1/core 3.1.2 and the pinned libraries. The final
+source identity and SHA-256 are included with the local release package. The
+small remaining OTA margin is a measured build limit, not a live free-space probe.
+Do not add dependencies or increase memory budgets to hide a size regression.
+
+No beta was flashed. A read-only status check reached the user's existing 1.10.0
+clock (time synchronized, valid cached weather); that does **not** validate this
+beta. Physical OTA, captive-portal provisioning, OLED appearance/brightness,
+Home Assistant end-to-end operation and a 24-hour soak remain pending. The
+updated GitHub workflow has not run on this unpublished branch. The online beta
+integration-guide link becomes available only after the beta tag/docs are pushed;
+the same guide is included locally now.
+
+
 ## Reproducible build
 
 Verified target: ESP8266 core **3.1.2**, `generic`, **80 MHz**, **DIO**,
@@ -30,6 +63,7 @@ version before rendering. The first v1.10.0 CI build allowed this replacement;
 the refreshed build corrects it.
 
 ```sh
+npm ci  # Node.js 22; esbuild 0.28.2 is build-only
 python3 tools/embed_web.py --check
 arduino-cli compile \
   --fqbn esp8266:esp8266:generic:eesz=1M64,FlashMode=dio,xtal=80 \
@@ -40,6 +74,7 @@ python3 tests/render_display.py --arduinojson /path/to/ArduinoJson/src \
 python3 -m pip install playwright==1.58.0
 python3 -m playwright install chromium
 python3 tests/test_web.py
+python3 tests/test_portal.py --wifimanager /path/to/WiFiManager
 python3 tests/check_build_size.py build \
   --size-tool /path/to/xtensa-lx106-elf-size
 ```

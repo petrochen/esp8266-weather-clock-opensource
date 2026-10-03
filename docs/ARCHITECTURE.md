@@ -1,5 +1,33 @@
 # Architecture Notes
 
+## 1.11 beta extensions
+
+A separate `FeatureSettings` record (magic FTR1, 32 bytes at EEPROM 432) keeps the
+legacy Config ABI untouched. Invalid records load conservative defaults without a
+migration write. One settings transaction validates Config, night and features
+before committing. External card data, hold state and forecasts live only in RAM.
+
+The weather request fetches current conditions, six hourly slots and two daily
+slots using Unix UTC timestamps. A 3072-byte transport check aborts oversized
+responses; `BoundedJsonAllocator` separately limits parser allocations to 4096
+bytes on ESP8266 (plus small allocation headers; host budget scales with pointer
+size). Current fields are required, optional data is explicitly unavailable.
+A successful response replaces the forecast. Display conversions leave stored
+values/API units canonical. Sun times/countdowns use the clock's offset/DST.
+
+Seven normal screen IDs plus one transient card share the scheduler. Zero dwell
+means inherit, availability gates selection, and expiring a held card returns to
+the clock. PIN/test overlays and night rules retain precedence. Dimming issues
+contrast commands only when needed; static pages still suppress redundant frames.
+
+JS/CSS are minified by pinned esbuild before deterministic gzip embedding. The
+ESP8266 core 3.1.2 global-header mechanism applies `WM_NODEBUG`, `WM_NOHELP` and a
+compact WiFiManager stylesheet across library compilation. The stock portal
+forms/scripts/routes remain intact; signal labels replace bitmap CSS sprites.
+These flags are source-controlled in `weather_clock.ino.globals.h`, not local
+compiler preferences. Recheck flash/IRAM/RAM budgets when changing dependencies.
+
+
 ## Runtime and dependencies
 
 `setup()` loads the existing EEPROM configuration, initializes WiFi, maintenance
@@ -57,6 +85,7 @@ bitmaps with WMO mapping and an explicit unknown state.
 | 0 | Legacy Config, validated by CONFIG_MAGIC |
 | 384 | PIN magic and six-digit password; original 13-byte password field retained |
 | 416 | NightSettings NIT1 record (enabled and start/end hours/minutes) |
+| 432 | FeatureSettings FTR1 record, 32 bytes (1.11 beta) |
 | 480 | Two-byte triple-power-cycle counter |
 
 Compile-time assertions prevent overlap. Maintenance credentials are initialized

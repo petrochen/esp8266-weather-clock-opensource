@@ -46,8 +46,10 @@ void ICACHE_FLASH_ATTR handleTestDisplay() {
 static bool ICACHE_FLASH_ATTR applySettings(JsonObjectConst values, bool& restart) {
   Config next = config;
   NightSettings nextNight = nightSettings;
+  FeatureSettings nextFeatures = featureSettings;
   const char* error = nullptr;
-  if (!updateSettings(next, values, error) || !updateNightSettings(nextNight, values, error)) {
+  if (!updateSettings(next, values, error) || !updateNightSettings(nextNight, values, error) ||
+      !updateFeatureSettings(nextFeatures, values, error)) {
     server.send(400, "text/plain", error);
     return false;
   }
@@ -55,14 +57,17 @@ static bool ICACHE_FLASH_ATTR applySettings(JsonObjectConst values, bool& restar
     strcmp(next.hostname, config.hostname) || strcmp(next.ntp_server, config.ntp_server);
   bool weatherChanged = next.latitude != config.latitude || next.longitude != config.longitude ||
     next.weather_enabled != config.weather_enabled;
-  if (!saveSettings(next, nextNight)) {
+  if (!saveSettings(next, nextNight, &nextFeatures)) {
     server.send(500, "text/plain", F("Could not save settings. Please try again."));
     return false;
   }
   config = next;
   nightSettings = nextNight;
+  featureSettings = nextFeatures;
+  if (!featureSettings.external_enabled) externalCard = ExternalCard();
   applyDisplaySettings();
   if (weatherChanged) resetWeather();
+  else refreshSunTimes();
   return true;
 }
 
@@ -92,36 +97,77 @@ void ICACHE_FLASH_ATTR handleAPITime() {
 
 void ICACHE_FLASH_ATTR handleAPIStatus() {
   JsonDocument doc;
+  JsonObject wifiInfo = doc["wifi"].to<JsonObject>();
+  JsonObject timeInfo = doc["time"].to<JsonObject>();
+  JsonObject systemInfo = doc["system"].to<JsonObject>();
+  JsonObject displayInfo = doc["display"].to<JsonObject>();
+  JsonObject unitsInfo = doc["units"].to<JsonObject>();
+  JsonObject weatherInfo = doc["weather"].to<JsonObject>();
+  JsonObject forecastInfo = doc["forecast"].to<JsonObject>();
+  JsonObject cardInfo = doc["card"].to<JsonObject>();
+
   char timeText[9];
   formatClockTime(timeText, sizeof(timeText), true);
-  doc["wifi"]["ssid"] = WiFi.SSID();
-  doc["wifi"]["ip"] = WiFi.localIP().toString();
-  doc["wifi"]["rssi"] = WiFi.RSSI();
-  doc["wifi"]["hostname"] = config.hostname;
-  doc["time"]["current"] = timeText;
-  doc["time"]["timezone_offset"] = config.timezone_offset;
-  doc["time"]["ntp_synced"] = timeIsSynced;
+  wifiInfo["ssid"] = WiFi.SSID();
+  wifiInfo["ip"] = WiFi.localIP().toString();
+  wifiInfo["rssi"] = WiFi.RSSI();
+  wifiInfo["hostname"] = config.hostname;
+  timeInfo["current"] = timeText;
+  timeInfo["timezone_offset"] = config.timezone_offset;
+  timeInfo["ntp_synced"] = timeIsSynced;
   unsigned long epoch = getAsyncEpoch();
-  doc["time"]["epoch"] = epoch;
-  doc["time"]["offset"] = getTotalOffset(epoch);
-  doc["time"]["hour_format_24"] = config.hour_format_24;
-  doc["system"]["firmware_version"] = FIRMWARE_VERSION;
-  doc["display"]["night_active"] = isNightModeActive();
-  doc["weather"]["enabled"] = config.weather_enabled;
-  doc["weather"]["valid"] = weather.valid;
-  doc["weather"]["stale"] = weather.stale;
-  doc["weather"]["temperature"] = weather.temperature;
-  doc["weather"]["code"] = weather.weathercode;
-  doc["weather"]["windspeed"] = weather.windspeed;
-  doc["weather"]["age_seconds"] = weather.valid ? (millis() - weather.lastUpdate) / 1000 : 0;
-  doc["weather"]["city"] = config.city_name;
-  doc["weather"]["sunrise"] = sunTimes.sunrise;
-  doc["weather"]["sunset"] = sunTimes.sunset;
-  doc["system"]["uptime"] = millis() / 1000;
-  doc["system"]["free_heap"] = ESP.getFreeHeap();
-  doc["system"]["max_free_block"] = ESP.getMaxFreeBlockSize();
-  doc["system"]["heap_fragmentation"] = ESP.getHeapFragmentation();
-  doc["system"]["chip_id"] = String(ESP.getChipId(), HEX);
+  timeInfo["epoch"] = epoch;
+  timeInfo["offset"] = getTotalOffset(epoch);
+  timeInfo["hour_format_24"] = config.hour_format_24;
+  timeInfo["dst_enabled"] = config.dst_enabled;
+  systemInfo["firmware_version"] = FIRMWARE_VERSION;
+  displayInfo["night_active"] = isNightModeActive();
+  displayInfo["night_dim"] = bool(featureSettings.night_action);
+  displayInfo["screen"] = displayMode;
+  displayInfo["paused"] = displayPaused;
+  for (uint8_t i = 0; i <= SCREEN_COUNT; ++i) displayInfo["available"].add(isModeEnabled(i));
+  unitsInfo["temperature"] = featureSettings.temperature_unit;
+  unitsInfo["wind"] = featureSettings.wind_unit;
+  weatherInfo["enabled"] = config.weather_enabled;
+  weatherInfo["valid"] = weather.valid;
+  weatherInfo["stale"] = weather.stale;
+  weatherInfo["temperature"] = weather.temperature;
+  weatherInfo["code"] = weather.weathercode;
+  weatherInfo["windspeed"] = weather.windspeed;
+  weatherInfo["age_seconds"] = weather.valid ? (millis() - weather.lastUpdate) / 1000 : 0;
+  weatherInfo["city"] = config.city_name;
+  weatherInfo["sunrise"] = sunTimes.sunrise;
+  weatherInfo["sunset"] = sunTimes.sunset;
+  weatherInfo["source_epoch"] = weather.sourceEpoch;
+  weatherInfo["source_age_seconds"] = weather.valid ? weatherSourceAge() : 0;
+  weatherInfo["is_day"] = weather.isDay;
+  weatherInfo["comfort_valid"] = weather.comfortValid;
+  weatherInfo["feels_like"] = weather.feelsLike;
+  weatherInfo["humidity"] = weather.humidity;
+  weatherInfo["wind_direction"] = weather.windDirection;
+  for (uint8_t i = 0; i < forecast.count; ++i) {
+    JsonObject hour = forecastInfo["hours"].add<JsonObject>();
+    hour["epoch"] = forecast.hours[i].epoch;
+    hour["temperature"] = forecast.hours[i].temperature;
+    hour["rain"] = forecast.hours[i].rain;
+  }
+  for (const auto& item : forecast.days) {
+    JsonObject day = forecastInfo["days"].add<JsonObject>();
+    day["epoch"] = item.epoch; day["valid"] = item.valid;
+    day["low"] = item.low; day["high"] = item.high; day["uv"] = item.uv;
+  }
+  cardInfo["enabled"] = bool(featureSettings.external_enabled);
+  cardInfo["active"] = externalCardActive();
+  if (externalCardActive()) {
+    cardInfo["title"] = externalCard.title; cardInfo["value"] = externalCard.value;
+    cardInfo["unit"] = externalCard.unit;
+    cardInfo["remaining_seconds"] = (externalCard.ttl - uint32_t(millis() - externalCard.received)) / 1000;
+  }
+  systemInfo["uptime"] = millis() / 1000;
+  systemInfo["free_heap"] = ESP.getFreeHeap();
+  systemInfo["max_free_block"] = ESP.getMaxFreeBlockSize();
+  systemInfo["heap_fragmentation"] = ESP.getHeapFragmentation();
+  systemInfo["chip_id"] = String(ESP.getChipId(), HEX);
   sendJSON(doc);
 }
 
@@ -198,8 +244,45 @@ void ICACHE_FLASH_ATTR handleAPIConfigExport() {
   JsonDocument doc;
   exportSettings(config, doc);
   exportNightSettings(nightSettings, doc);
+  exportFeatureSettings(featureSettings, doc);
   server.sendHeader("Content-Disposition", "attachment; filename=clock-config.json");
   sendJSON(doc);
+}
+
+static bool ICACHE_FLASH_ATTR readObject(JsonDocument& doc, size_t limit) {
+  if (!server.hasArg("plain") || server.arg("plain").length() > limit ||
+      deserializeJson(doc, server.arg("plain"), DeserializationOption::NestingLimit(2)) || !doc.is<JsonObject>()) {
+    server.send(400, "text/plain", F("Invalid or oversized JSON object")); return false;
+  }
+  return true;
+}
+
+static void ICACHE_FLASH_ATTR handleDisplayControl() {
+  JsonDocument doc;
+  if (!readObject(doc, 128)) return;
+  const char* action = doc["action"].as<const char*>();
+  int screen = doc["screen"].is<int>() ? doc["screen"].as<int>() : -1;
+  if (!action || !controlDisplay(action, screen)) {
+    server.send(400, "text/plain", F("Choose next, hold, resume or show an available screen")); return;
+  }
+  server.send(200, "application/json", F("{\"status\":\"ok\"}"));
+}
+
+static void ICACHE_FLASH_ATTR handleExternalCard() {
+  if (!featureSettings.external_enabled) { server.send(403, "text/plain", F("Enable external cards in Settings first")); return; }
+  JsonDocument doc;
+  if (!readObject(doc, 512)) return;
+  static bool accepted = false;
+  static uint32_t lastAccepted = 0;
+  if (accepted && uint32_t(millis() - lastAccepted) < 1000) {
+    server.send(429, "text/plain", F("Send at most one card per second")); return;
+  }
+  const char* error = nullptr;
+  if (!updateExternalCard(externalCard, doc.as<JsonObjectConst>(), millis(), error)) {
+    server.send(400, "text/plain", error); return;
+  }
+  accepted = true; lastAccepted = millis(); invalidateDisplay();
+  server.send(200, "application/json", F("{\"status\":\"ok\"}"));
 }
 
 void ICACHE_FLASH_ATTR handleAPIConfigImport() {
@@ -301,6 +384,8 @@ void ICACHE_FLASH_ATTR setupWebServer() {
   server.on("/test-display", HTTP_GET, handleTestDisplay);
   server.on("/api/time", HTTP_GET, handleAPITime);
   server.on("/api/status", HTTP_GET, handleAPIStatus);
+  server.on("/api/display", HTTP_POST, handleDisplayControl);
+  server.on("/api/card", HTTP_POST, handleExternalCard);
   server.on("/api/debug", HTTP_GET, handleAPIDebug);
   server.on("/api/weather", HTTP_GET, handleAPIWeather);
   server.on("/api/config", HTTP_GET, handleAPIConfigExport);

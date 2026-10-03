@@ -1,0 +1,8 @@
+{
+  "name": "weather-clock-web-build",
+  "private": true,
+  "description": "Build-only minification for the embedded ESP-01S web interface",
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

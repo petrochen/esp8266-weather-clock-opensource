@@ -54,8 +54,9 @@ Feature requests are welcome! Please include:
 **Web interface:**
 
 - Edit `web/index.html`, `web/app.css` and `web/app.js`; keep assets self-contained.
+- Install Node.js 22 and run `npm ci` (pinned build-only minifier).
 - Run `python3 tools/embed_web.py` after changes and include the generated header.
-- Run `python3 tests/test_web.py` with Playwright 1.58.0 and Chromium installed.
+- Run `python3 tests/test_web.py` with Playwright 1.58.0 and Chromium installed; it tests the generated, minified header.
 - Check firmware size/static RAM and inspect desktop/mobile screenshots; keep
   polling limited to visible pages and never persist a maintenance PIN.
 
@@ -78,6 +79,7 @@ Feature requests are welcome! Please include:
 ```bash
 # Arduino IDE: Sketch → Verify/Compile
 # Or use arduino-cli:
+npm ci
 python3 tools/embed_web.py --check
 arduino-cli compile --fqbn esp8266:esp8266:generic:eesz=1M64,FlashMode=dio,xtal=80 \
   --warnings all --build-path build firmware/weather_clock
@@ -86,7 +88,8 @@ arduino-cli compile --fqbn esp8266:esp8266:generic:eesz=1M64,FlashMode=dio,xtal=
 ### Flashing
 
 ```bash
-# OTA upload (preferred, when device is on the network)
+# Legacy CLI compatibility: curl prompts for the six-digit PIN.
+# Normal browser updates at /update need only the PIN, no username.
 curl -u admin -F "firmware=@build/weather_clock.ino.bin" http://192.168.x.x/update
 
 # Initial flash via FTDI (3.3V! ESP-01S in socket — no soldering)

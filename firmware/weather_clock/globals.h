@@ -17,6 +17,10 @@
 // Configuration
 extern Config config;
 extern NightSettings nightSettings;
+extern FeatureSettings featureSettings;
+extern ForecastData forecast;
+extern ExternalCard externalCard;
+extern bool displayPaused;
 
 // OLED Display
 extern Adafruit_SSD1306 display;
@@ -120,6 +124,10 @@ bool ICACHE_FLASH_ATTR isModeEnabled(uint8_t mode);
 void fetchWeatherAsync();
 void processWeather();
 void resetWeather();
+void refreshSunTimes();
+uint32_t weatherSourceAge();
+bool externalCardActive();
+bool controlDisplay(const char* action, int screen);
 
 // Web server functions (web_server.cpp)
 void ICACHE_FLASH_ATTR setupWebServer();

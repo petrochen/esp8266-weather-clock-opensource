@@ -201,5 +201,23 @@ int main(){
     assert(display.bitmapY>=8 && display.bitmapY+display.bitmapHeight<=48); // below stale mark, above city
   }
   config.display_orientation=255;applyDisplaySettings();assert(display.rotation==2);
+  nightSettings.enabled=0; featureSettings=FeatureSettings(); config=Config(); inTransition=false;
+  displayMode=0; displayPaused=false; fakeMillis=100000; lastModeSwitch=fakeMillis;
+  featureSettings.seconds[0]=20; featureSettings.dissolve=0;
+  fakeMillis+=6000;updateDisplayRotation();assert(displayMode==0 && !inTransition);
+  fakeMillis+=15000;updateDisplayRotation();assert(displayMode==1 && !inTransition);
+  assert(controlDisplay("hold", -1)); fakeMillis+=120000;updateDisplayRotation();assert(displayMode==1);
+  assert(!controlDisplay("show", 4));
+  assert(controlDisplay("show", 0));assert(displayPaused && displayMode==0);
+  assert(controlDisplay("resume", -1) && !displayPaused);
+  featureSettings.external_enabled=1; externalCard.received=UINT32_MAX-999; externalCard.ttl=5000;
+  fakeMillis=0;assert(externalCardActive());fakeMillis=4000;assert(!externalCardActive());
+  externalCard.received=fakeMillis;assert(controlDisplay("show", SCREEN_COUNT));
+  fakeMillis+=5000;updateDisplayRotation();assert(displayMode==0); // held card expires
+  featureSettings.night_action=1;featureSettings.night_brightness=0;nightSettings.enabled=1;
+  testEpoch=23*3600;updateDisplayRotation();assert(!displaySleeping && appliedBrightness==0);
+  testEpoch=7*3600;updateDisplayRotation();assert(appliedBrightness==config.brightness);
+  weather.isDay=false;weather.weathercode=0;displayWeather();assert(display.bitmap==weather_moon);
+  weather.weathercode=61;displayWeather();assert(display.bitmap==weather_rain);
   std::cout<<"PASS: contrast bounds, startup without pause, on-demand PIN expiry, offline placeholder, screen transitions, overlay expiry, static frames, dissolve endpoints\n";
 }

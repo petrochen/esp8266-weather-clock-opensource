@@ -17,7 +17,7 @@
 
 I bought a cute weather clock kit from AliExpress ([TJ-56-654](https://pt.aliexpress.com/item/1005008333782531.html)) and discovered it was **leaking my WiFi password in plaintext** to anyone within radio range. So I ripped out the firmware, wrote my own, and ended up with a clock I could inspect, configure and update over WiFi. No weather API key required. No WiFi password on the settings page.
 
-**Want to use it?** Start with the [installation guide](docs/INSTALLATION.md), grab a published binary from [Releases](https://github.com/petrochen/esp8266-weather-clock-opensource/releases), or read [what's new in 1.10.0](docs/releases/v1.10.0.md). This source tree targets **1.10.0**; the release notes distinguish completed checks from hardware testing still to do.
+**Want to use it?** Start with the [installation guide](docs/INSTALLATION.md), grab a published binary from [Releases](https://github.com/petrochen/esp8266-weather-clock-opensource/releases), or read [what's new in 1.10.0](docs/releases/v1.10.0.md). The last published stable release is **1.10.0**. This source tree prepares **[1.11.0-beta.1](docs/releases/v1.11.0-beta.1.md)**; its notes separate completed checks from hardware testing still to do.
 
 **Here for the story?** Read on.
 
@@ -79,6 +79,20 @@ Weather failures keep the last good reading, marked as stale. Time and weather r
 
 The web page is compressed in flash, with no framework, external font or separate filesystem image. Seconds tick in the browser; the visible dashboard requests fresh data once a minute. The network state machines are asynchronous, but startup provisioning, HTTP serving, OLED transfers and firmware updates still have synchronous work. It's a small ESP8266, not a promise of zero blocking.
 
+### Next: time first, more weather when you want it
+
+The **1.11 beta** adds a time-and-weather page, outdoor comfort, hourly rain
+probability, two-day min/max and UV, wind direction and a moon at night. Presets,
+per-screen timing and optional night dimming keep these useful on a tiny screen.
+Home Assistant can send a room reading as a short card that expires automatically.
+The compact web panel gains import preview, city search and display controls.
+
+[![Actual beta OLED screens](images/beta-oled-preview.png)](docs/releases/v1.11.0-beta.1.md)
+
+The beta is prepared locally, not yet published or hardware-validated. Existing
+settings and PINs are preserved; the new pages are opt-in. Details belong in the
+[beta notes](docs/releases/v1.11.0-beta.1.md) and [integration guide](docs/HOME_ASSISTANT.md).
+
 ### What's new in 1.10.0?
 
 The latest work brings **PIN-only updates**, a redesigned web interface, optional night mode, saved orientation before the startup screen, and small weather icons with corrected condition mapping. It also fixes weather/DNS recovery, empty uploads and the zero-brightness regression from an intermediate development build.
@@ -136,7 +150,7 @@ The README tells the story. These pages hold the instructions and reference mate
 | --- | --- |
 | Install, update or recover a clock | [Installation](docs/INSTALLATION.md) |
 | Use the web pages, night schedule and PIN | [User guide](docs/USAGE.md) |
-| Connect scripts or a home automation system | [API reference](docs/API.md) |
+| Connect scripts or a home automation system | [API reference](docs/API.md) and [Home Assistant](docs/HOME_ASSISTANT.md) |
 | Check wiring and memory layout | [Hardware](docs/HARDWARE.md) |
 | Understand timers, state machines and storage | [Architecture](docs/ARCHITECTURE.md) |
 | Build, test or prepare a release | [Contributing](CONTRIBUTING.md) and [validation](docs/VALIDATION.md) |

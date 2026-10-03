@@ -27,7 +27,7 @@ with tempfile.TemporaryDirectory(prefix='weather-clock-host-') as work:
     common = [os.environ.get('CXX', 'c++'), '-std=c++17', '-Wall', '-Wextra', '-Werror',
               '-I' + str(root / 'tests/host'), '-I' + str(stage),
               '-I' + str(source), '-I' + str(headers)]
-    for name, extra in [('settings', [str(source / 'settings.cpp')]), ('network', []), ('maintenance', []), ('display', [str(source / 'settings.cpp')]), ('night', [str(source / 'settings.cpp')]), ('update', [])]:
+    for name, extra in [('settings', [str(source / 'settings.cpp')]), ('network', []), ('maintenance', []), ('display', [str(source / 'settings.cpp')]), ('night', [str(source / 'settings.cpp')]), ('features', [str(source / 'settings.cpp')]), ('update', [])]:
         binary = stage / name
         flags = ['-I' + str(root / 'tests/host/update')] if name == 'update' else []
         subprocess.run(common[:1] + flags + common[1:] + [str(root / f'tests/host/test_{name}.cpp')] + extra + ['-o', str(binary)], check=True)

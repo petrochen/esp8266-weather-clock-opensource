@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0-beta.1] - Unreleased
+
+- Add optional combined clock/weather, outdoor comfort, hourly rain, two-day
+  min/max/UV, wind direction, moon and next-sun-event countdown.
+- Add screen presets, per-page durations, hold/next/direct selection, configurable
+  transitions, temperature/wind units and scheduled night dimming.
+- Extend local status/control APIs and add one opt-in external card with bounded
+  text, update rate and TTL; provide a Home Assistant package example.
+- Add browser-only city search, reviewed settings import and private diagnostic
+  export while retaining the compact default settings layout.
+- Preserve legacy settings/PIN storage and API units. Bound weather response and
+  parser memory; distinguish download age from source age.
+- Recover flash through pinned build-time minification and compact setup portal
+  resources; add regressions and 288 native OLED renders.
+
+See [beta release notes](docs/releases/v1.11.0-beta.1.md). Prepared locally; physical
+OTA, provisioning and long-running beta validation are still pending.
+
 ## [1.10.0] - 2026-10-03
 
 PIN-only maintenance, a refreshed web interface, night mode and

@@ -9,6 +9,15 @@
   let state, receivedAt = 0, polling = false, busy = false, savedSettings, settingsDirty = false;
   let maintenanceAction = '';
   const settingsForm = $('settings-form');
+  const screenNames = ['Time', 'Weather', 'Sunrise / sunset', 'Outdoor comfort', 'Hourly rain', 'Daily forecast', 'Wind', 'External card'];
+  const durationKeys = ['clock', 'weather', 'sun', 'comfort', 'rain', 'daily', 'wind'];
+  durationKeys.forEach((key, index) => {
+    const row = document.createElement('div'); row.className = 'form-row';
+    const label = document.createElement('label'); label.htmlFor = 'duration-' + key; label.textContent = screenNames[index];
+    const input = document.createElement('input'); input.id = label.htmlFor; input.name = 'screen_' + key + '_sec';
+    input.type = 'number'; input.min = 0; input.max = 120; input.value = 0; input.required = true;
+    row.append(label, input); $('screen-durations').append(row);
+  });
   function message(element, text, error = false) {
     element.textContent = text;
     element.classList.toggle('error', error);
@@ -30,6 +39,40 @@
     } finally { clearTimeout(timeout); }
   }
   const pad = n => String(n).padStart(2, '0');
+  const degrees = value => state?.units?.temperature ? value * 1.8 + 32 : value;
+  const degreeUnit = () => state?.units?.temperature ? '°F' : '°C';
+  function forecastDate(epoch) {
+    let offset = state.time.timezone_offset ?? state.time.offset;
+    if (state.time.dst_enabled) {
+      const year = new Date(epoch * 1000).getUTCFullYear();
+      const boundary = month => Date.UTC(year, month, 31 - new Date(Date.UTC(year, month, 31)).getUTCDay(), 1) / 1000;
+      if (epoch >= boundary(2) && epoch < boundary(9)) offset += 3600;
+    }
+    return new Date((epoch + offset) * 1000);
+  }
+  function renderForecast() {
+    const weather = state.weather;
+    const details = [];
+    if (weather.valid && weather.comfort_valid) details.push(`Feels like ${degrees(weather.feels_like).toFixed(1)}${degreeUnit()}`);
+    if (weather.valid && weather.humidity >= 0) details.push(`Outdoor humidity ${weather.humidity}%`);
+    $('weather-extra').textContent = details.join(' · ') || 'Waiting for outdoor details.';
+    function row(target, values) {
+      const tr = document.createElement('tr');
+      values.forEach(value => { const td = document.createElement('td'); td.textContent = value; tr.append(td); });
+      target.append(tr);
+    }
+    $('hourly-forecast').replaceChildren(); $('daily-forecast').replaceChildren();
+    for (const hour of state.forecast?.hours || []) {
+      if (state.time.ntp_synced && hour.epoch <= state.time.epoch) continue;
+      row($('hourly-forecast'), [forecastDate(hour.epoch).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit', timeZone: 'UTC'}), `${degrees(hour.temperature).toFixed(0)}${degreeUnit()}`, hour.rain >= 0 ? hour.rain + '%' : '—']);
+    }
+    for (const day of state.forecast?.days || []) if (day.valid) {
+      if (state.time.ntp_synced && forecastDate(day.epoch).toISOString().slice(0, 10) < forecastDate(state.time.epoch).toISOString().slice(0, 10)) continue;
+      row($('daily-forecast'), [forecastDate(day.epoch).toLocaleDateString('en-GB', {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'}), `${degrees(day.low).toFixed(0)} / ${degrees(day.high).toFixed(0)}${degreeUnit()}`, day.uv >= 0 ? day.uv.toFixed(1) : '—']);
+    }
+    for (const id of ['hourly-forecast', 'daily-forecast']) if (!$(id).children.length) row($(id), ['No forecast available', '—', '—']);
+    $('external-card').textContent = state.card?.active ? `${state.card.title}: ${state.card.value} ${state.card.unit} · expires in ${state.card.remaining_seconds}s` : '';
+  }
   function tick() {
     if (document.hidden || page !== 'clock' || !state?.time?.ntp_synced) return;
     const date = new Date((state.time.epoch + state.time.offset + (performance.now() - receivedAt) / 1000) * 1000);
@@ -64,13 +107,21 @@
     $('weather-city').textContent = weather.city || 'Your location';
     const valid = weather.enabled && weather.valid;
     const [description, symbol] = condition(weather.code);
-    $('weather-temp').textContent = valid ? Number(weather.temperature).toFixed(1) : '—';
+    $('weather-temp').textContent = valid ? degrees(Number(weather.temperature)).toFixed(1) : '—';
+    $('weather-unit').textContent = degreeUnit();
     $('weather-description').textContent = !weather.enabled ? 'Weather is switched off' : valid ? description : 'Waiting for weather';
-    $('weather-symbol').textContent = valid ? symbol : '—';
-    $('weather-freshness').textContent = valid ? `${weather.stale ? 'Saved reading · ' : ''}Updated ${Math.floor(weather.age_seconds / 60)} min ago` : '';
-    $('weather-wind').textContent = valid ? `${Math.round(weather.windspeed)} km/h` : '—';
+    $('weather-symbol').textContent = valid ? weather.is_day === false && weather.code <= 2 ? '☾' : symbol : '—';
+    $('weather-freshness').textContent = valid ? `${weather.stale ? 'Saved reading · ' : ''}Fetched ${Math.floor(weather.age_seconds / 60)} min ago · reading ${Math.floor((weather.source_age_seconds ?? weather.age_seconds) / 60)} min old` : '';
+    const windUnit = state.units?.wind || 0;
+    const wind = weather.windspeed * [1, 1 / 3.6, 0.621371][windUnit];
+    const direction = weather.wind_direction >= 0 ? ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.floor((weather.wind_direction + 22) / 45) % 8] + ' ' : '';
+    $('weather-wind').textContent = valid ? `${direction}${Math.round(wind)} ${['km/h', 'm/s', 'mph'][windUnit]}` : '—';
     $('sunrise').textContent = weather.sunrise; $('sunset').textContent = weather.sunset;
-    $('display-note').textContent = state.display.night_active ? 'Night mode: display off. Showing a PIN wakes it temporarily.' : 'Display active';
+    $('display-note').textContent = state.display.night_active ? state.display.night_dim ? 'Night mode: display dimmed.' : 'Night mode: display off. Showing a PIN wakes it temporarily.' : 'Display active';
+    $('active-screen').value = state.display.screen ?? 0;
+    [...$('active-screen').options].forEach(option => { option.disabled = state.display.available ? !state.display.available[option.value] : Number(option.value) > 2; });
+    $('screen-hold').textContent = state.display.paused ? 'Resume rotation' : 'Hold';
+    renderForecast();
     $('device-ip').textContent = state.wifi.ip;
     $('device-rssi').textContent = state.wifi.rssi + ' dBm';
     $('device-uptime').textContent = `${Math.floor(state.system.uptime / 3600)} h ${Math.floor(state.system.uptime / 60) % 60} min`;
@@ -95,6 +146,28 @@
     });
   }
   refresh();
+
+  async function displayControl(action, screen) {
+    try {
+      await request('/api/display', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action, screen})});
+      message($('screen-result'), action === 'show' ? 'Screen selected and held.' : 'Display updated.'); await refresh();
+    } catch (error) { message($('screen-result'), error.message, true); }
+  }
+  $('active-screen').addEventListener('change', event => displayControl('show', Number(event.target.value)));
+  $('screen-next').addEventListener('click', () => displayControl('next'));
+  $('screen-hold').addEventListener('click', () => displayControl(state?.display?.paused ? 'resume' : 'hold'));
+  $('download-diagnostics').addEventListener('click', () => {
+    if (!state) return;
+    const report = {firmware: state.system.firmware_version, uptime: state.system.uptime,
+      free_heap: state.system.free_heap, max_free_block: state.system.max_free_block,
+      heap_fragmentation: state.system.heap_fragmentation, ntp_synced: state.time.ntp_synced,
+      wifi_rssi: state.wifi.rssi, weather_valid: state.weather.valid, weather_stale: state.weather.stale,
+      weather_age_seconds: state.weather.age_seconds, source_age_seconds: state.weather.source_age_seconds,
+      display: state.display};
+    const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], {type: 'application/json'}));
+    const link = document.createElement('a'); link.href = url; link.download = 'clock-diagnostics.json'; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
 
   const formControl = name => settingsForm.elements.namedItem(name);
   function settingsChanges() {
@@ -128,6 +201,7 @@
   }
   function fillSettings(config) {
     savedSettings = config;
+    $('screen-preset').value = 'custom';
     for (const [key, value] of Object.entries(config)) {
       const input = formControl(key);
       if (!input) continue;
@@ -154,7 +228,72 @@
   formControl('brightness').addEventListener('input', event => { $('brightness-value').textContent = event.target.value + ' / 7'; });
   settingsForm.addEventListener('input', () => settingsState(true));
   settingsForm.addEventListener('change', () => settingsState(true));
+  settingsForm.addEventListener('invalid', event => { const details = event.target.closest('details'); if (details) details.open = true; }, true);
   $('discard-settings').addEventListener('click', () => { if (savedSettings && !busy) fillSettings(savedSettings); });
+  function stageSettings(values) {
+    const original = savedSettings;
+    const password = formControl('password').value, clear = formControl('clear_password').checked;
+    fillSettings({...original, ...values}); savedSettings = original;
+    formControl('password').value = password; formControl('clear_password').checked = clear; settingsState(true);
+  }
+  $('screen-preset').addEventListener('change', event => {
+    if (!savedSettings || event.target.value === 'custom') return;
+    const preset = event.target.value;
+    const detailed = preset === 'weather';
+    const values = {show_weather: detailed, show_sunrise_sunset: detailed, clock_weather: event.target.value !== 'clock',
+      show_comfort: detailed, show_rain: detailed, show_daily: detailed, show_wind: detailed};
+    durationKeys.forEach(key => { values['screen_' + key + '_sec'] = key === 'clock' ? 20 : 5; });
+    // A preset changes only its own controls, preserving other unsaved edits.
+    stageSettings({...settingsChanges(), ...values});
+    $('screen-preset').value = preset;
+  });
+  let importedSettings;
+  $('import-settings').addEventListener('click', () => { if (savedSettings && !busy) $('import-file').click(); });
+  $('import-file').addEventListener('change', async () => {
+    const file = $('import-file').files[0];
+    if (!file || !savedSettings || busy) return;
+    try {
+      if (file.size > 8192) throw new Error('Settings file must be at most 8 KB.');
+      const values = JSON.parse(await file.text());
+      if (!values || Array.isArray(values) || typeof values !== 'object') throw new Error('Choose a settings JSON object.');
+      importedSettings = {};
+      for (const [key, value] of Object.entries(values)) {
+        if (key === 'firmware_version' || !Object.hasOwn(savedSettings, key)) continue;
+        if (typeof value !== typeof savedSettings[key] || (typeof value === 'number' && !Number.isFinite(value))) throw new Error('Invalid type for ' + key);
+        if (value !== savedSettings[key]) importedSettings[key] = value;
+      }
+      $('import-preview').textContent = Object.entries(importedSettings).map(([key, value]) => `${key}: ${JSON.stringify(savedSettings[key])} → ${JSON.stringify(value)}`).join('\n') || 'No changes.';
+      $('apply-import').disabled = !Object.keys(importedSettings).length; $('import-dialog').showModal();
+    } catch (error) { message($('settings-result'), error.message, true); }
+    finally { $('import-file').value = ''; }
+  });
+  $('cancel-import').addEventListener('click', () => $('import-dialog').close());
+  $('apply-import').addEventListener('click', () => {
+    stageSettings({...settingsChanges(), ...importedSettings}); $('import-dialog').close();
+    message($('settings-result'), 'Imported into the form. Review and save to apply.');
+  });
+  $('city-search').addEventListener('click', async () => {
+    const query = $('city-query').value.trim();
+    if (query.length < 2 || busy) { message($('city-search-result'), 'Enter at least two characters.', true); return; }
+    $('city-search').disabled = true; $('city-results').replaceChildren();
+    try {
+      const data = await request('https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&name=' + encodeURIComponent(query));
+      for (const city of data.results || []) {
+        if (!Number.isFinite(city.latitude) || !Number.isFinite(city.longitude) || typeof city.name !== 'string') continue;
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary';
+        button.textContent = [city.name, city.admin1, city.country].filter(Boolean).join(', ');
+        button.addEventListener('click', () => {
+          const fits = new TextEncoder().encode(city.name).length <= 31;
+          formControl('latitude').value = city.latitude; formControl('longitude').value = city.longitude;
+          formControl('city_name').value = fits ? city.name : '';
+          settingsState(true); message($('city-search-result'), `${button.textContent}. Coordinates selected.${fits ? '' : ' Enter a short city label.'} Check the UTC offset before saving.`);
+        });
+        $('city-results').append(button);
+      }
+      message($('city-search-result'), $('city-results').children.length ? 'Choose a location; changes are saved only with Save settings.' : 'No matching locations. Try city, country.');
+    } catch { message($('city-search-result'), 'City search is unavailable. Enter coordinates manually or try again.', true); }
+    finally { $('city-search').disabled = false; }
+  });
   settingsForm.addEventListener('submit', async event => {
     event.preventDefault();
     if (!savedSettings || busy || !settingsForm.reportValidity()) return;

@@ -1,6 +1,63 @@
 # Local API Reference
 
-This reference follows the 1.10.0 handlers in
+## 1.11 beta additions
+
+The routes and legacy fields below remain compatible. New POST routes use JSON
+and the same local-network access model as ordinary settings, without a PIN.
+
+| Method/path | Body / result |
+| --- | --- |
+| `POST /api/display` | `{"action":"next"}`, `hold`, `resume`, or `{"action":"show","screen":0}`; 128-byte body limit |
+| `POST /api/card` | `{"title":"Room CO2","value":"920","unit":"ppm","ttl":180}`; 512-byte body limit |
+
+`show` selects and holds an enabled, available page; `resume` resumes rotation.
+IDs are 0 clock, 1 weather, 2 sun, 3 comfort, 4 rain, 5 daily, 6 wind, 7 external.
+Night mode and maintenance overlays still take precedence. Invalid/unavailable
+selections return 400. Controls and cards do not persist across restart.
+
+Cards require `external_enabled=true` (otherwise 403). Title/value/unit limits are
+31/15/11 UTF-8 bytes, value must be a string, control characters are rejected.
+TTL is 5–3600 seconds, or `{"ttl":0}` to clear. One accepted update per second
+(otherwise 429). One card replaces the previous one; expiry is uptime-based and
+safe across timer rollover. Invalid data leaves the previous card intact.
+
+Additional `/api/status` fields:
+
+| Object | Fields and meaning |
+| --- | --- |
+| `time` | `dst_enabled` selects the existing European DST rule |
+| `display` | `screen`, `paused`, `available` (8 booleans in ID order), `night_dim` (configured dim action, independent of whether night is active) |
+| `units` | `temperature`: 0 °C / 1 °F; `wind`: 0 km/h / 1 m/s / 2 mph; display preferences only |
+| `weather` | `source_epoch` UTC, `source_age_seconds`, `is_day`, `comfort_valid`, `feels_like` °C, `humidity` percent (-1 absent), `wind_direction` degrees (-1 absent) |
+| `forecast.hours` | Up to 6 entries: UTC `epoch`, `temperature` °C, `rain` probability percent (-1 absent); the array may be absent when empty |
+| `forecast.days` | 2 entries: UTC `epoch`, `valid`, `low`/`high` °C, `uv` (-1 absent) |
+| `card` | `enabled`, `active`; active cards also contain `title`, `value`, `unit`, `remaining_seconds` |
+
+`age_seconds` is still time since download. `source_age_seconds` also accounts for
+the provider's UTC timestamp once NTP is synchronized. Staleness includes failed/
+overdue refreshes, source readings over 2 hours old or over 1 hour in the future.
+Check `enabled`, `valid` and `stale` before using weather/forecast values. Forecast
+is replaced with each successful current reading; unavailable optional values
+never silently borrow a previous response. `comfort_valid` qualifies feels-like.
+
+New config fields (exported and accepted by the existing config endpoint):
+
+| Field | Values |
+| --- | --- |
+| `screen_clock_sec`, `screen_weather_sec`, `screen_sun_sec`, `screen_comfort_sec`, `screen_rain_sec`, `screen_daily_sec`, `screen_wind_sec` | Integer 0–120; 0 inherits the legacy common interval, not “hide” |
+| `clock_weather`, `dissolve`, `sun_countdown`, `external_enabled` | Boolean |
+| `show_comfort`, `show_rain`, `show_daily`, `show_wind` | Boolean |
+| `temperature_unit` | 0 °C, 1 °F |
+| `wind_unit` | 0 km/h, 1 m/s, 2 mph |
+| `night_action` | 0 off, 1 dim |
+| `night_brightness` | 0–7; zero remains visible |
+
+Defaults: new pages/cards/combined weather/countdown off, dissolve on, metric
+units, night action off, all per-screen durations inherit the old interval.
+All new fields validate transactionally together with legacy/night settings.
+
+
+The base reference follows the compatible handlers in
 [`web_server.cpp`](../firmware/weather_clock/web_server.cpp),
 [`settings.cpp`](../firmware/weather_clock/settings.cpp),
 [`maintenance.cpp`](../firmware/weather_clock/maintenance.cpp) and
