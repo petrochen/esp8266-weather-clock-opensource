@@ -173,10 +173,11 @@
   if (page === 'clock') {
     setInterval(tick, 1000);
     setInterval(refresh, 60000);
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) { tick(); if (performance.now() - receivedAt >= 60000) refresh(); }
-    });
   }
+  // A tab opened in the background skips the first status read; catch up when it is shown.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { tick(); if (!state || performance.now() - receivedAt >= 60000) refresh(); }
+  });
   refresh();
 
   async function displayControl(action, screen) {
