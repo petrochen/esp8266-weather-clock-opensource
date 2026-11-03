@@ -1,5 +1,136 @@
 # Build, validation and upgrade notes
 
+## 1.11.0-beta.4 local validation
+
+Local checks completed on 2026-10-03. The pinned isolated Linux build produced
+**477,664 bytes**, leaving **1,568 bytes** below the unchanged OTA limit. Static
+RAM remains **38,464 bytes** and instruction memory plus cache remains
+**62,007 / 65,536 bytes**. The embedded page is **63,816 bytes** before gzip,
+**19,503 bytes** in flash. No HTTP/TLS/catalog buffers were added to the ESP.
+The compiled firmware snapshot was compared byte-for-byte with the source files.
+
+Passed: all seven host executables with ASan/UBSan; ESLint and Ruff; embedded
+asset reproducibility; browser SHA-256 through the maximum image size; release
+ordering, malformed catalog/recommendation rejection and transition metadata;
+five publisher regressions for channel separation, history-only imports,
+idempotence, immutable/withdrawn releases and invalid metadata/images.
+
+The actual minified embedded UI passed Chromium tests at desktop and 320/390 px:
+All/Stable/Beta filters, explicit reinstall/downgrade confirmation, warnings about
+GitHub/UV/version-picker loss, unknown storage and withdrawn builds, PIN before
+firmware download, checksum/size rejection and local-file fallback. Post-upload
+simulations cover temporary disconnects, a confirmed reboot, no reboot,
+same-version reinstalls and a reboot into the wrong version. PINs were cleared
+and absent from browser storage and GitHub requests. Screenshots were inspected.
+
+The four actual published images (1.10.0 and beta.1–3) were independently staged
+using their GitHub metadata, BUILD_INFO and checksums. Production beta.4 browser
+code accepted the history and verified every image hash. Unmodified beta.2 and
+beta.3 JavaScript accepted the generated legacy catalog (347 bytes; the separate
+four-release history is 1,788 bytes). This validates source/catalog compatibility,
+not a physical downgrade or device update. Local history staging did not publish
+anything to GitHub.
+
+At the local-build stage, no hardware was flashed, rebooted or reset. Physical OTA, downgrade/return,
+EEPROM preservation across installed versions, power-loss recovery and a 24-hour
+soak remain pending. GitHub CI/publication and live CDN refresh had not yet run at that stage;
+subsequent publication and hardware results are recorded below. OLED and provisioning code were unchanged; their
+separate raster/portal suites were not repeated.
+
+### Published build and physical trial
+
+The canonical beta.4 release is built from `7bf1adc60ea1474cc225e1638f2daf4e0ed229d5`.
+[GitHub Actions 37146110583](https://github.com/petrochen/esp8266-weather-clock-opensource/actions/runs/37146110583)
+passed all checks, including browser/setup-portal regressions and 320 OLED renders.
+Its three release assets include the 477,664-byte BIN with SHA-256
+`1f181f53380c07fcaf319a7cf49c9f3b06a251a62969c0817b013d666358bd51`.
+History bootstrap and automatic beta.4 publication succeeded; legacy Stable
+remained 1.10.0, old tags were preserved and the new history lists five releases.
+
+On 2026-10-03, a physical ESP-01S completed **beta.2 → beta.4 → beta.3 → beta.4**
+using the clock's actual GitHub/PIN web interface, without manual BIN uploads.
+The beta.4 page displayed the rollback consequences and confirmed beta.3 after
+restart; beta.3 then offered beta.4 through the preserved legacy catalog. All
+**30 compared display, screen, unit and night settings** matched after each step.
+The same maintenance PIN worked throughout. The clock was left on beta.4.
+
+This checks one device and this specific route. Older Stable rollback, power-loss
+recovery and long-running hardware testing remain unverified. Live GitHub CDN
+caching briefly delayed discovery immediately after publication; the normal
+Check GitHub button eventually found beta.4 without a workaround.
+
+## 1.11.0-beta.2 local validation
+
+Local checks completed on 2026-10-03; no hardware flash was performed. The pinned isolated Linux
+build passed with **476,496 bytes** (2,736 bytes below the same OTA limit), **38,464
+bytes static RAM** and **62,007 / 65,536 instruction bytes including cache**.
+The embedded web page is 59,549 bytes before gzip and 18,340 bytes in flash.
+Firmware is 2,128 bytes smaller than beta.1 with the browser updater and verified saves.
+The [optimization audit](CODE_QUALITY.md) compares the cleanup against the preceding
+local beta.2 build and separates linked sizes from unmeasured hardware performance.
+
+Passed: all host regressions; the new HTTP update harness with ASan/UBSan;
+browser SHA-256 comparisons against Node crypto through 479,232 bytes; semantic
+version/catalog checks; publication validation, including rebuilt releases;
+the actual minified UI in Chromium at desktop and 320/390-pixel widths; insecure
+HTTP hashing, PIN-before-download, corrupt/oversized downloads, local fallback and
+credential isolation. An actual browser successfully fetched a public raw GitHub
+file from an insecure HTTP origin. Both existing public release images were
+staged locally and matched their metadata and SHA-256 digests.
+
+Additional settings regressions passed for mismatched readback after an OK POST,
+unavailable readback, retry, float32 coordinate rounding, restart without readback
+and saved screen availability. Preset explanations and the laptop layout passed.
+On the user's installed early beta.1, enabling the weather pages restored rotation;
+the user confirmed the physical display changed. Toggling Wind off/on through
+the real browser form and reloading retained both saves. This verifies the installed
+build's current behavior, not the new beta.2 code; the original reset was not reproduced.
+
+The code-quality revision passed all seven host executables with ASan/UBSan,
+including new weather-boundary and JSON-reader compatibility cases. ESLint and
+Ruff passed with the pinned versions. The complete embedded browser suite and
+release hashing/catalog tests passed again. The duplicate String-reader parser
+is absent from the final ELF; API limits and EEPROM layouts are unchanged.
+
+Embedded-asset reproducibility, script syntax, workflow YAML parsing and diff
+whitespace checks passed. See the [GitHub Actions history](https://github.com/petrochen/esp8266-weather-clock-opensource/actions)
+for the release commit's build and channel-publication results, separate from these local checks.
+No physical OTA/reboot/power-loss test was performed. OLED drawing and provisioning
+were not changed; their dedicated raster/portal suites were not repeated for beta.2.
+
+## 1.11.0-beta.1 pre-release validation
+
+Local checks completed on 2026-10-03 using the pinned toolchain below:
+
+| Check | Result |
+| --- | --- |
+| ESP-01S binary | **478,624 bytes**, below the conservative 479,232-byte OTA budget by **608 bytes** |
+| Static RAM | **39,044 bytes**, below the 45,000-byte project budget |
+| Instruction region including 32 KB cache | **62,007 / 65,536 bytes** (94.62%, below 95%) |
+| Embedded web page | 52,041 bytes before gzip, **15,246 bytes** in flash after minification/gzip |
+| Host regressions | Passed, including feature EEPROM isolation, atomic validation, source age, parser allocation exhaustion, optional/misaligned forecast arrays, screen timing, card expiry, UV levels/date rollover/missing values and reserved-byte migration |
+| Actual OLED raster | **320 renders**, zero automatic wraps/clipped cells/clipped ink; ASan/UBSan passed |
+| Chromium against embedded minified UI | Passed desktop/mobile, import preview, presets, dirty-state preservation, forecast/units/control, UV levels/missing/stale values, hidden-tab polling and PIN/upload guards |
+| Compact setup portal | Upstream templates/scripts tested at 320 px, including 32-character wide SSID, open/locked selection and password visibility |
+| Home Assistant example | YAML and 10 Jinja templates parsed; rendered REST command bodies are valid JSON |
+| Live provider sample | Public-coordinate Open-Meteo response: 1,213 bytes, 6 hours/2 days; parsed by the production module in the host harness |
+| Reproducibility checks | Clean pinned npm installation, regenerated header matches, JS/Python syntax and diff whitespace checks passed |
+
+The binary was built in an isolated Linux ARM container from a frozen source
+snapshot, with Arduino CLI 1.4.1/core 3.1.2 and the pinned libraries. The final
+source identity and SHA-256 are included with the release package. The
+small remaining OTA margin is a measured build limit, not a live free-space probe.
+Do not add dependencies or increase memory budgets to hide a size regression.
+
+No beta was flashed. A read-only status check reached the user's existing 1.10.0
+clock (time synchronized, valid cached weather); that does **not** validate this
+beta. Physical OTA, captive-portal provisioning, OLED appearance/brightness,
+Home Assistant end-to-end operation and a 24-hour soak remain pending. The
+[GitHub Actions history](https://github.com/petrochen/esp8266-weather-clock-opensource/actions?query=branch%3Acodex%2Fweather-clock-beta)
+records the release commit's automated checks separately from these local results.
+The beta tag includes the integration guide, source and all README demo assets.
+
+
 ## Reproducible build
 
 Verified target: ESP8266 core **3.1.2**, `generic`, **80 MHz**, **DIO**,
@@ -30,6 +161,7 @@ version before rendering. The first v1.10.0 CI build allowed this replacement;
 the refreshed build corrects it.
 
 ```sh
+npm ci  # Node.js 22; esbuild 0.28.2 is build-only
 python3 tools/embed_web.py --check
 arduino-cli compile \
   --fqbn esp8266:esp8266:generic:eesz=1M64,FlashMode=dio,xtal=80 \
@@ -40,6 +172,7 @@ python3 tests/render_display.py --arduinojson /path/to/ArduinoJson/src \
 python3 -m pip install playwright==1.58.0
 python3 -m playwright install chromium
 python3 tests/test_web.py
+python3 tests/test_portal.py --wifimanager /path/to/WiFiManager
 python3 tests/check_build_size.py build \
   --size-tool /path/to/xtensa-lx106-elf-size
 ```
@@ -82,10 +215,11 @@ real upload timing or actual hardware. The browser/core HTTP updater retains its
 existing progress behavior; the labeled OLED percent screen belongs to ArduinoOTA.
 
 The update handler rejects missing or zero-byte files before starting OTA.
-Firmware/filesystem delegation, aborted uploads, per-request state and guard
-registration order are tested with a substituted core updater. The guard, which
-runs before the core, authenticates each chunk and the final POST. The core retains
-image validation/writing; it does not provide a second authentication layer.
+From beta.2, firmware/filesystem byte streams, writer errors, interrupted full-size
+images, multiple-file rejection, per-request state and commit timing are tested with
+a substituted core writer. The HTTP adapter authenticates each chunk and the final
+POST. The core retains image validation/writing; it does not provide a second
+authentication layer. See [update-channel checks](UPDATES.md#checks).
 
 `python3 tests/test_web.py` executes the actual UI in Chromium against a simulated
 API: settings round-trip, empty file, wrong-PIN preflight, successful upload,

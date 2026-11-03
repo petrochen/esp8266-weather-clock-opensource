@@ -1,74 +1,85 @@
 #include "globals.h"
+#include <Updater.h>
+#include <FS.h>
+#include <flash_hal.h>
 
-// Intercept only POST /update, before the core updater's handlers. Actual flash
-// validation/writing stays in ESP8266HTTPUpdateServer. Delay its START callback
-// until the first non-empty chunk so missing/zero-byte files cannot begin OTA.
-class NonEmptyUpdateHandler : public ESP8266WebServer::RequestHandlerType {
-  bool started = false;
-  bool received = false;
-  bool aborted = false;
+// Keep the core flash writer/validation, without its duplicate HTML form,
+// Basic-auth UI, debug paths and cross-origin handlers. The PIN is checked on
+// every chunk and again before committing. Commit only after the complete POST.
+class FirmwareUpdateHandler : public ESP8266WebServer::RequestHandlerType {
+  bool started = false, received = false, ended = false, part = false;
+  uint8_t tail = 0;
+  String failure;
 
-  ESP8266WebServer::RequestHandlerType* updater(const String& uri) {
-    for (auto* handler = next(); handler; handler = handler->next()) {
-      if (handler->canHandle(HTTP_POST, uri)) return handler;
-    }
-    return nullptr;
+  void stop() {
+    // One byte is withheld until handle(): even a full-size interrupted image
+    // is incomplete, so end(false) cannot arm the bootloader to install it.
+    if (started && Update.isRunning()) Update.end(false);
+    started = false;
+  }
+  void fail(const String& reason) {
+    if (!failure.length()) failure = reason;
+    stop();
   }
 public:
   bool canHandle(HTTPMethod method, const String& uri) override {
     if (method != HTTP_POST || uri != "/update") return false;
-    // The web server selects one handler at the start of each request, before
-    // parsing multipart data. Reset even if this request has no file parts.
-    started = received = aborted = false;
+    stop(); started = received = ended = part = false; failure = "";
     return true;
   }
   bool canUpload(const String& uri) override { return uri == "/update"; }
-
-  void upload(ESP8266WebServer& web, const String& uri, HTTPUpload& upload) override {
-    if (!authenticatedMaintenancePassword()) return;
-    auto* handler = updater(uri);
-    if (!handler) return;
+  void upload(ESP8266WebServer&, const String&, HTTPUpload& upload) override {
+    if (!authenticatedMaintenancePassword()) { fail(F("Incorrect PIN")); return; }
+    if (failure.length()) return;
     if (upload.status == UPLOAD_FILE_START) {
-      started = received = aborted = false;
-    } else if (upload.status == UPLOAD_FILE_WRITE && upload.currentSize && upload.filename.length()) {
+      if (part || !upload.filename.length() || (upload.name != "firmware" && upload.name != "filesystem")) {
+        fail(F("Choose one firmware or filesystem file")); return;
+      }
+      part = true;
+    } else if (upload.status == UPLOAD_FILE_WRITE && upload.currentSize) {
+      if (!part || ended) { fail(F("Invalid upload")); return; }
       if (!started) {
-        upload.status = UPLOAD_FILE_START;
-        handler->upload(web, uri, upload);
-        upload.status = UPLOAD_FILE_WRITE;
+        if (Update.isRunning()) { fail(F("Another update is running")); return; }
+        const bool filesystem = upload.name == "filesystem";
+        const uint32_t freeSpace = ESP.getFreeSketchSpace();
+        const size_t maximum = filesystem ? size_t(FS_end) - size_t(FS_start)
+          : freeSpace > 0x1000 ? (freeSpace - 0x1000) & 0xFFFFF000 : 0;
+        if (filesystem) close_all_fs();
+        if (!Update.begin(maximum, filesystem ? U_FS : U_FLASH)) { fail(Update.getErrorString()); return; }
         started = true;
       }
-      received = true;
-      handler->upload(web, uri, upload);
-    } else if (started && (upload.status == UPLOAD_FILE_END || upload.status == UPLOAD_FILE_ABORTED)) {
-      aborted = upload.status == UPLOAD_FILE_ABORTED;
-      handler->upload(web, uri, upload);
+      if ((received && Update.write(&tail, 1) != 1) ||
+          (upload.currentSize > 1 && Update.write(upload.buf, upload.currentSize - 1) != upload.currentSize - 1)) {
+        fail(Update.getErrorString()); return;
+      }
+      tail = upload.buf[upload.currentSize - 1]; received = true;
+    } else if (upload.status == UPLOAD_FILE_END) {
+      ended = true;
+    } else if (upload.status == UPLOAD_FILE_ABORTED) {
+      fail(F("Upload interrupted"));
     }
   }
-
-  bool handle(ESP8266WebServer& web, HTTPMethod method, const String& uri) override {
-    if (!requireMaintenanceAuth()) return true;
-    if (!received || aborted) {
-      web.send(400, "text/html",
-        F("<!DOCTYPE html><meta charset='utf-8'><h1>Update not started</h1>"
-          "<p>Choose a non-empty firmware or filesystem file and try again.</p>"
-          "<p><a href='/update'>Back to update</a></p>"));
+  bool handle(ESP8266WebServer& web, HTTPMethod, const String&) override {
+    if (!requireMaintenanceAuth()) { stop(); return true; }
+    if (!received || !ended || failure.length()) {
+      stop();
+      web.send(400, "text/plain", String(F("Update error: ")) + (failure.length() ? failure : String(F("Choose a non-empty file"))));
       return true;
     }
-    auto* handler = updater(uri);
-    if (handler) return handler->handle(web, method, uri);
-    web.send(503, "text/plain", "Updater unavailable");
+    if (Update.write(&tail, 1) != 1 || !Update.end(true)) {
+      const String error = Update.getErrorString(); stop();
+      web.send(200, "text/plain", String(F("Update error: ")) + error); return true;
+    }
+    started = false;
+    web.client().setNoDelay(true);
+    web.send(200, "text/plain", F("Update Success! Rebooting..."));
+    delay(100); web.client().stop(); ESP.restart();
     return true;
   }
 };
 
 void ICACHE_FLASH_ATTR setupWebUpdate() {
   if (!maintenancePassword()) return;
-  // Registration order matters: custom page/guard first, stock updater second.
-  server.on("/update", HTTP_GET, []() {
-    serveWebUI();
-  });
-  server.addHandler(new NonEmptyUpdateHandler());
-  // The outer handler authenticates every chunk and final POST. The core owns
-  // flash validation/writing only; it does not implement PIN Bearer auth.
-  httpUpdater.setup(&server, "/update");
+  server.on("/update", HTTP_GET, []() { serveWebUI(); });
+  server.addHandler(new FirmwareUpdateHandler());
 }

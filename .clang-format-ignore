@@ -1,0 +1,7 @@
+# Generated assets and pixel rows have their own layout.
+build/**
+node_modules/**
+firmware/weather_clock/web_assets.h
+firmware/weather_clock/display_glyphs.h
+firmware/weather_clock/weather_icons.h
+firmware/weather_clock/status_icons.h

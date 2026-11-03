@@ -9,7 +9,6 @@
 #include <Arduino.h>
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
-#include <ESP8266HTTPUpdateServer.h>
 #include <WiFiUdp.h>
 #include <Adafruit_SSD1306.h>
 #include "config.h"
@@ -17,6 +16,10 @@
 // Configuration
 extern Config config;
 extern NightSettings nightSettings;
+extern FeatureSettings featureSettings;
+extern ForecastData forecast;
+extern ExternalCard externalCard;
+extern bool displayPaused;
 
 // OLED Display
 extern Adafruit_SSD1306 display;
@@ -26,7 +29,6 @@ extern WiFiUDP ntpUDP;
 
 // Web server
 extern ESP8266WebServer server;
-extern ESP8266HTTPUpdateServer httpUpdater;
 
 // State machines — volatile: written from ESPAsyncTCP callbacks, read in main loop
 extern volatile WeatherState weatherState;
@@ -120,6 +122,10 @@ bool ICACHE_FLASH_ATTR isModeEnabled(uint8_t mode);
 void fetchWeatherAsync();
 void processWeather();
 void resetWeather();
+void refreshSunTimes();
+uint32_t weatherSourceAge();
+bool externalCardActive();
+bool controlDisplay(const char* action, int screen);
 
 // Web server functions (web_server.cpp)
 void ICACHE_FLASH_ATTR setupWebServer();

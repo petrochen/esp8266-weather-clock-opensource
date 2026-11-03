@@ -48,8 +48,8 @@ runs still need testing. [Release notes](https://github.com/petrochen/esp8266-we
 · [Home Assistant](https://github.com/petrochen/esp8266-weather-clock-opensource/blob/d0160e765f243cfb2441c639ccc5eb89cc4e54cd/docs/HOME_ASSISTANT.md).
 
 **First installation?** Start with the [flashing guide](docs/INSTALLATION.md).
-The default branch (`main`) builds **Stable 1.10.0**; to build the beta, check out
-its release tag. A normal update needs only the firmware `.bin`, not a filesystem
+The default branch (`main`) carries the **1.11 beta** source; to build Stable
+1.10.0, check out its release tag `v1.10.0`. A normal update needs only the firmware `.bin`, not a filesystem
 image. For release notifications, choose **Watch → Custom → Releases**.
 
 **Here for the story?** Read on.
@@ -112,6 +112,19 @@ I decided to write a replacement I could understand and keep improving. The goal
 Weather failures keep the last good reading, marked as stale. Time and weather requests recover through bounded retries. The clock can show an unsynchronized-time placeholder instead of pretending an epoch is the current time.
 
 The web page is compressed in flash, with no framework, external font or separate filesystem image. Seconds tick in the browser; the visible dashboard requests fresh data once a minute. The network state machines are asynchronous, but startup provisioning, HTTP serving, OLED transfers and firmware updates still have synchronous work. It's a small ESP8266, not a promise of zero blocking.
+
+### Next: time first, more weather when you want it
+
+The **1.11 beta** adds a time-and-weather page, outdoor comfort, hourly rain
+probability, two-day min/max, a dedicated daytime UV peak page, wind direction
+and a moon at night. UV shows today, its level and tomorrow’s expected maximum. Presets,
+per-screen timing and optional night dimming keep these useful on a tiny screen.
+Home Assistant can send a room reading as a short card that expires automatically.
+The compact web panel gains import preview, city search and display controls.
+
+The beta is available as a [pre-release](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.0-beta.1) for testing;
+physical hardware validation is still pending. Existing settings and PINs are preserved; the new pages are opt-in. Details belong in the
+[beta notes](docs/releases/v1.11.0-beta.1.md) and [integration guide](docs/HOME_ASSISTANT.md).
 
 ### What's new in 1.10.0?
 
@@ -180,7 +193,7 @@ The README tells the story. These pages hold the instructions and reference mate
 | --- | --- |
 | Install, update or recover a clock | [Installation](docs/INSTALLATION.md) |
 | Use the web pages, night schedule and PIN | [User guide](docs/USAGE.md) |
-| Connect scripts or a home automation system | [API reference](docs/API.md) |
+| Connect scripts or a home automation system | [API reference](docs/API.md) and [Home Assistant](docs/HOME_ASSISTANT.md) |
 | Check wiring and memory layout | [Hardware](docs/HARDWARE.md) |
 | Understand timers, state machines and storage | [Architecture](docs/ARCHITECTURE.md) |
 | Build, test or prepare a release | [Contributing](CONTRIBUTING.md) and [validation](docs/VALIDATION.md) |

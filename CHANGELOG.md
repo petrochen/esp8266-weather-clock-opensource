@@ -5,6 +5,104 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0-beta.4] - 2026-10-03 (pre-release)
+
+### Added
+
+- Choose a published version with All / Stable / Beta filters, including a
+  same-version reinstall or an explicit downgrade with PIN confirmation.
+- Show transition consequences: loss of GitHub updates, manual BIN recovery,
+  UV/extra screens and audited settings compatibility. Unknown storage profiles
+  and withdrawn releases cannot be installed from the catalog.
+- Add a bounded release history, audited capability profiles and history-only
+  publication without moving the legacy latest-channel pointers backwards.
+
+### Changed
+
+- Keep schema-1 `channels.json` small and compatible with beta.2/3; publish the
+  new history and verified images in the same commit. No extra release attachments.
+- Refresh uses a unique catalog request and displays its publication timestamp.
+
+### Fixed
+
+- Stop treating a successful upload as a completed update: wait for reboot and
+  check the installed version; report uncertainty instead of automatically retrying.
+- Allow selecting stable even when its version number is below the installed beta.
+
+See [beta.4 notes](docs/releases/v1.11.0-beta.4.md). A physical browser-only
+beta.2 → beta.4 → beta.3 → beta.4 trial passed with 30 compared settings retained.
+Older Stable rollback, power-loss recovery and long-running tests remain pending.
+
+## [1.11.0-beta.3] - 2026-10-03 (pre-release)
+
+### Changed
+
+- Bump the firmware version to provide a newer beta for testing the GitHub
+  update flow from beta.2: discovery, PIN confirmation, installation and the
+  reported version after reboot.
+- Firmware behavior, web assets, settings storage and maintenance PIN are
+  otherwise unchanged from beta.2. No new features or bug fixes are included.
+
+Use **Stable + Beta** in the Update page. See the
+[beta.3 test instructions](docs/releases/v1.11.0-beta.3.md).
+Physical OTA, reboot/recovery and long-running hardware validation remain pending.
+
+## [1.11.0-beta.2] - 2026-10-03 (pre-release)
+
+### Added
+
+- GitHub release checks for Stable and Stable + Beta, with PIN-confirmed
+  installation from the Update page and browser-side target, size and SHA-256 checks.
+- A same-repository publisher for verified update catalogs and firmware images,
+  with canonical build selection and protection against channel downgrades.
+- Pinned ESLint/Ruff checks, EditorConfig/clang-format guidance and ASan/UBSan
+  across all seven host suites in CI.
+
+### Changed
+
+- Replace the unused stock updater page with a compact HTTP adapter using the
+  ESP8266 core writer. Manual firmware/filesystem uploads remain available;
+  the PIN stays on the local device connection and is never sent to GitHub.
+- Clarify screen presets, rename Time & weather to Combined clock + UV, mark
+  manual screen choices as Custom, and explain unavailable Clock-page options.
+- Share the HTTP JSON reader, avoid repeated weather conversions and sun-label
+  formatting, and store the weather URL format in flash. The firmware is
+  2,176 bytes smaller and static RAM is 368 bytes lower than the preceding local
+  beta.2 build; memory budgets remain unchanged.
+- Keep release downloads to the firmware, SHA256SUMS and BUILD_INFO.txt.
+  Release notes, screenshots and the complete OLED gallery live in the repository.
+
+### Fixed
+
+- Show Saved only after non-restarting settings changes have been read back
+  and verified; preserve edits for retry if values differ or verification fails.
+- Prevent firmware finalization for incomplete or multiple-file upload requests;
+  commit only after the complete authenticated request has been received.
+
+Verified build: 476,496-byte firmware and 38,464-byte static RAM. Settings and
+maintenance PIN storage remain compatible. See [beta.2 release notes](docs/releases/v1.11.0-beta.2.md).
+Physical OTA testing and long-running hardware validation remain pending.
+
+## [1.11.0-beta.1] - 2026-10-03 (pre-release)
+
+- Add optional combined clock/weather, outdoor comfort, hourly rain, two-day
+  min/max/UV, wind direction, moon and next-sun-event countdown.
+- Add a dedicated daytime UV peak screen with today/tomorrow values and levels,
+  plus a visible web summary; preserve screen IDs and feature EEPROM layout.
+- Add screen presets, per-page durations, hold/next/direct selection, configurable
+  transitions, temperature/wind units and scheduled night dimming.
+- Extend local status/control APIs and add one opt-in external card with bounded
+  text, update rate and TTL; provide a Home Assistant package example.
+- Add browser-only city search, reviewed settings import and private diagnostic
+  export while retaining the compact default settings layout.
+- Preserve legacy settings/PIN storage and API units. Bound weather response and
+  parser memory; distinguish download age from source age.
+- Recover flash through pinned build-time minification and compact setup portal
+  resources; add regressions and 320 native OLED renders.
+
+See [beta release notes](docs/releases/v1.11.0-beta.1.md). Published as a pre-release; physical
+OTA, provisioning and long-running beta validation are still pending.
+
 ## [1.10.0] - 2026-10-03
 
 PIN-only maintenance, a refreshed web interface, night mode and

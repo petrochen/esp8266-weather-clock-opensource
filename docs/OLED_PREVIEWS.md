@@ -1,5 +1,51 @@
 # Every OLED screen, before and after
 
+## README animations
+
+The [screen tour](../images/clock-demo.gif) holds each of nine pages for 2.4–3.8
+seconds. The [Wi-Fi demo](../images/wifi-demo.gif) cycles the three real connection
+frames, shows the connected screen, then the clock. They are composed from the
+same verified native PNGs as the gallery below, enlarged exactly 4× without
+smoothing. Only the frame and explanatory captions are added outside the OLED.
+These are synthetic demonstrations, not a recording or startup timing measurement.
+The gallery uses direct page changes; the firmware also supports dissolve.
+
+Both GIFs loop and total about 220 KB. For a still view, use the
+[screen poster](../images/clock-demo-poster.png),
+[Wi-Fi poster](../images/wifi-demo-poster.png) or the full static gallery.
+They are documentation assets and are not embedded in the firmware.
+
+To regenerate after updating the actual screen renders:
+
+```sh
+python3 tests/render_display.py --arduinojson /path/to/ArduinoJson/src \
+  --gfx /path/to/Adafruit_GFX_Library --output build/display-preview --sanitize
+python3 -m pip install Pillow==12.2.0
+python3 tools/make_readme_gifs.py --renders build/display-preview
+```
+
+The generator checks input clipping metrics, then decodes every GIF frame to
+verify exact OLED pixels, duration and loop metadata. It uses Pillow's bundled
+font for the surrounding captions, a fixed palette and no image-generation model.
+
+## 1.11 beta gallery
+
+The prepared beta adds 29 scenarios for combined time/weather, outdoor comfort,
+rain, daily min/max/UV, wind units/direction, moon, sun countdown, external cards
+and dimming, including eight UV scenarios (all levels, absent/stale data). Together with the 51 existing
+cases, **80 scenarios × 4 orientations = 320 actual GFX renders** are checked.
+For beta.2, [download the self-contained gallery](previews/v1.11.0-beta.2-oled.html?raw=1)
+and open it in a browser. It includes all 320 native PNGs, with search, orientation
+and zoom controls, and works offline. The gallery is documentation in the repository;
+only the firmware and its verification files are attached to the release.
+The historical 1.10 before/after gallery below remains unchanged.
+
+[![Selected beta OLED screens](../images/beta-oled-preview.png)](../images/beta-oled-preview.png)
+
+Pixel layouts are checked with the production drawing code and pinned GFX font.
+They do not substitute for physical checks of OLED brightness, color bands or I²C.
+
+
 The refreshed **v1.10.0** keeps the original release number and replaces its first
 build, `5ae2387ac626`. These are pixels drawn by the firmware with the actual
 Adafruit_GFX 1.12.4 rasterizer and font, using synthetic data. There are **51

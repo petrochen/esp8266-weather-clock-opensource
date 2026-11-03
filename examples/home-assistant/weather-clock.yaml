@@ -1,0 +1,72 @@
+# Home Assistant package; replace every CLOCK_IP before use.
+# Existing packages can be loaded with:
+# homeassistant:
+#   packages: !include_dir_named packages
+rest:
+  - resource: http://CLOCK_IP/api/status
+    scan_interval: 60
+    timeout: 10
+    sensor:
+      - name: Weather Clock Outdoor Temperature
+        unique_id: weather_clock_outdoor_temperature
+        device_class: temperature
+        state_class: measurement
+        unit_of_measurement: "°C"
+        value_template: "{{ value_json.weather.temperature }}"
+        availability: "{{ value_json.weather.enabled and value_json.weather.valid and not value_json.weather.stale }}"
+      - name: Weather Clock Outdoor Humidity
+        unique_id: weather_clock_outdoor_humidity
+        device_class: humidity
+        state_class: measurement
+        unit_of_measurement: "%"
+        value_template: "{{ value_json.weather.humidity }}"
+        availability: "{{ value_json.weather.enabled and value_json.weather.valid and not value_json.weather.stale and value_json.weather.humidity >= 0 }}"
+      - name: Weather Clock Free Heap
+        unique_id: weather_clock_free_heap
+        unit_of_measurement: B
+        state_class: measurement
+        value_template: "{{ value_json.system.free_heap }}"
+
+rest_command:
+  weather_clock_display:
+    url: http://CLOCK_IP/api/display
+    method: POST
+    content_type: application/json
+    payload: '{{ {"action": action, "screen": screen | default(0) | int} | tojson }}'
+  weather_clock_brightness:
+    url: http://CLOCK_IP/api/config
+    method: POST
+    content_type: application/json
+    payload: '{{ {"brightness": brightness | int} | tojson }}'
+  weather_clock_card:
+    url: http://CLOCK_IP/api/card
+    method: POST
+    content_type: application/json
+    payload: '{{ {"title": title, "value": value | string, "unit": unit | default(""), "ttl": ttl | default(180) | int} | tojson }}'
+  weather_clock_clear_card:
+    url: http://CLOCK_IP/api/card
+    method: POST
+    content_type: application/json
+    payload: '{"ttl":0}'
+
+# Optional: enable external cards on the clock and replace the source entity.
+# Remove this automation if you only want the sensors and manual commands.
+automation:
+  - id: weather_clock_room_card
+    alias: Weather clock - living room CO2
+    mode: single
+    triggers:
+      - trigger: time_pattern
+        minutes: "/1"
+    actions:
+      - choose:
+          - conditions: "{{ is_number(states('sensor.living_room_co2')) }}"
+            sequence:
+              - action: rest_command.weather_clock_card
+                data:
+                  title: Living room CO2
+                  value: "{{ states('sensor.living_room_co2') | float | round(0) | int | string }}"
+                  unit: ppm
+                  ttl: 180
+        default:
+          - action: rest_command.weather_clock_clear_card

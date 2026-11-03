@@ -61,6 +61,10 @@ struct UDPMock {
 inline Config config;
 inline WeatherData weather;
 inline SunTimes sunTimes;
+inline FeatureSettings featureSettings;
+inline ForecastData forecast;
+inline ExternalCard externalCard;
+inline bool displayPaused = false;
 inline RetryConfig weatherRetry, ntpRetry;
 inline volatile WeatherState weatherState = WEATHER_IDLE;
 inline volatile NTPState ntpState = NTP_IDLE;

@@ -1,8 +1,61 @@
 # Using Your Weather Clock
 
+## Trying the 1.11 beta
+
+The source tree now targets **1.11.0-beta.2**; the sections below also describe the
+compatible stable controls. Start with Settings → **Combined clock + UV** → Save for a
+large clock with a weather footer, alternating with the UV daytime peak. **Clock only** hides weather pages;
+**Detailed weather** enables the extra pages. Presets stage changes before Save
+and keep unrelated unsaved settings, but replace individual screen choices and
+durations. Choose a preset first, then adjust individual screens and save.
+The combined preset was called **Time & weather** in beta.1.
+Discard restores the saved configuration.
+
+Expand **More display options** for per-page durations (0 inherits the common
+interval), feels-like/humidity, rain probability, daily min/max/UV, wind, units,
+sun countdown, dissolve and external cards. Each forecast value comes from the
+weather provider; humidity is outdoors, not a measurement inside your room.
+Night mode can now dim to a separate brightness instead of turning the OLED off.
+All of this is optional: an upgrade preserves the previous display choices.
+
+On the Clock page, choose an available screen to hold it, or use Next / Hold /
+Resume. A held external card expires normally. Night schedules and temporary PIN
+screens override these controls. Hold is not saved across restart.
+Unavailable options are disabled in Settings or waiting for usable data. Enable
+the required pages in Settings and save; external cards also need a data source.
+
+**Import settings** reads a local JSON export (at most 8 KB), previews known fields
+and stages them in the form. Click Save to apply. Password/PIN fields from the file
+are ignored; a password you have already typed into the form is preserved.
+**Find city** searches Open-Meteo from your browser and stages coordinates. Pick
+the timezone explicitly. A place name longer than the existing 31-byte UTF-8
+storage limit needs a shorter display label; it is never silently saved truncated.
+
+Expand weather details for six hourly slots and two daily forecasts. The rain OLED
+page shows the next three available slots; it does not predict minute-by-minute
+rain. “Fetched” age and source reading age are separate. Missing fields use a
+placeholder; stale readings remain marked. Download diagnostics from Device
+details to share a report without network identifiers, location or credentials.
+For room readings, see [Home Assistant](HOME_ASSISTANT.md).
+
+
 Once the clock is on WiFi, open its IP address or `http://tj56654-clock.local/`
-where mDNS is available. This guide describes the 1.10.0 interface. For the first
+where mDNS is available. The base controls are shared with 1.10.0. For the first
 flash or recovery, see [Installation](INSTALLATION.md).
+
+## UV daytime peak
+
+Enable **UV daytime peak** in More display options, or select the Combined clock + UV
+preset and Save. The screen shows today's predicted daily maximum, its level and
+tomorrow's maximum. It has its own duration setting and direct screen selection.
+The web Clock page shows the same summary without expanding forecast details.
+
+Levels use the rounded whole index: 0–2 Low, 3–5 Moderate, 6–7 High, 8–10 Very high,
+11+ Extreme. The API and forecast table retain the provider's decimal value.
+This is a daytime peak forecast, even when viewed at night; it is not current UV.
+Missing/expired days are not replaced by tomorrow, and stale data is marked.
+The dedicated page requires a synchronized clock and today's available UV value.
+New screen settings default off on upgrade; selecting the preset enables them.
 
 ## Clock
 
@@ -45,6 +98,10 @@ The bottom bar indicates unsaved changes; **Save settings** sends only changed
 fields, while **Discard** restores the last saved values without contacting the
 clock. Both buttons are inactive until something changes. On narrow screens,
 the groups stack and the action bar stays within reach while scrolling.
+Starting with beta.2, non-restarting saves read the settings back from the clock
+before showing **Saved**. A mismatch or failed read keeps your edits in the form
+with an error so you can retry. Network changes that restart the clock use its
+save acknowledgement without waiting for a readback.
 
 | Section | Controls |
 | --- | --- |
@@ -102,16 +159,30 @@ backup for another device. JSON import is available through the
 The normal update is one `.bin` file. The web interface is bundled into the firmware,
 so there is no separate web/filesystem upload to perform.
 
-1. Open **Update** (`/update`) and choose the firmware file for this clock.
+1. Open **Update** (`/update`). From 1.11.0-beta.2, **GitHub release** checks for a
+   newer **Stable** or **Stable + Beta** version. The initial channel follows your
+   installed version; changing it does not install anything. Read the release
+   notes, or select **Local file** to use a downloaded image.
 2. Press **Show PIN on clock**. Read the six digits on the physical OLED.
-3. Enter the PIN, with or without the grouping dash, and press **Upload & restart**.
+3. Enter the PIN, with or without the grouping dash, and press **Install & restart**
+   (or **Upload & restart** for a local file).
 4. Keep power connected and wait for the result. A successful update restarts the
    clock; return to the Clock page after it reconnects and check the version in
    the header beside the hostname.
 
 There is no username field. Missing/empty files cannot start an update; the browser
-checks the PIN before sending the firmware. The advanced **Filesystem** option is
+checks the PIN before downloading/sending the firmware. GitHub downloads are checked
+for the target, size and SHA-256 before any firmware bytes reach the clock. Keep the
+browser page open until completion. Checks occur on opening Update, changing the
+channel or pressing **Check GitHub**; there are no unattended background installs.
+An older/equal version is never offered automatically. Downgrades and reinstalling
+the same version require a deliberate local-file upload.
+
+The advanced **Filesystem** option is
 for a deliberately supplied filesystem image, not the normal release binary.
+The device's PIN is sent only to the clock and is not stored in the browser.
+GitHub being unavailable does not prevent local-file updates. The online catalog
+must first be published by the repository maintainer; see [release updates](UPDATES.md).
 
 The current installed firmware handles the first upload. When upgrading an older
 version, use that version's existing login or code; the PIN-only interface appears

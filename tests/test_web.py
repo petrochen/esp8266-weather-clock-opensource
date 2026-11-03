@@ -5,15 +5,20 @@ No device is contacted. Requires playwright==1.58.0 and its Chromium browser.
 import argparse
 from copy import deepcopy
 import json
+import gzip
+import hashlib
 from pathlib import Path
 import re
+import struct
+from urllib.parse import urlsplit
 from playwright.sync_api import sync_playwright
 
 root = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--screenshots', type=Path)
 args = parser.parse_args()
-html = (root / 'web/index.html').read_text().replace('/* INLINE_CSS */', (root / 'web/app.css').read_text()).replace('/* INLINE_JS */', (root / 'web/app.js').read_text())
+header = (root / 'firmware/weather_clock/web_assets.h').read_text()
+html = gzip.decompress(bytes(int(value, 16) for value in re.findall(r'0x([0-9a-f]{2})', header))).decode()
 version = re.search(r'FIRMWARE_VERSION "([^"]+)"', (root / 'firmware/weather_clock/config.h').read_text()).group(1)
 status = dict(wifi=dict(hostname='living-room-clock', ip='192.168.2.149', rssi=-58),
               time=dict(epoch=1791031680, offset=3600, ntp_synced=True, hour_format_24=True),
@@ -25,22 +30,65 @@ config = dict(firmware_version=version, ssid='Home', hostname='living-room-clock
               latitude=37.19, longitude=-8.54, city_name='Portimão', weather_enabled=True, weather_interval=1800,
               display_rotation_sec=5, display_orientation=2, show_weather=True, show_sunrise_sunset=True,
               night_enabled=False, night_start_hour=23, night_start_minute=0, night_end_hour=7, night_end_minute=0)
+config.update(clock_weather=False, dissolve=True, temperature_unit=0, wind_unit=0, night_action=0, night_brightness=0,
+              external_enabled=False, sun_countdown=False, show_comfort=False, show_rain=False, show_daily=False, show_wind=False, show_uv=False)
+config.update({'screen_' + key + '_sec': 0 for key in ['clock', 'weather', 'sun', 'comfort', 'rain', 'daily', 'wind', 'uv']})
+status['display'].update(screen=0, paused=False, available=[True, True, True, False, False, False, False, False, False])
+status['units'] = dict(temperature=0, wind=0)
+status['weather'].update(comfort_valid=True, feels_like=21.2, humidity=68, wind_direction=270, is_day=True, source_epoch=1791031500)
+status['forecast'] = dict(hours=[dict(epoch=1791036000, temperature=22, rain=60)], days=[dict(epoch=1790985600, low=16, high=23, uv=4.2, valid=True), dict(epoch=1791072000, low=15, high=22, uv=5.8, valid=True)])
 calls = []
 updates = []
 pins = []
 api_status = deepcopy(status)
 upload_error = False
 config_error = False
+config_ignore = False
+config_read_error = False
+config_restart = False
+config_round_coordinates = False
+firmware = b'\xe9\x02\x02\x20' + (bytes(range(256)) * 1870)[:478380]
+firmware_digest = hashlib.sha256(firmware).hexdigest()
+def release_item(version, github=True, forecast=True, **fields):
+    return dict(version=version, size=len(firmware), sha256=firmware_digest, published='2026-10-03T12:00:00Z', revision='0123456789ab',
+                status='available', profile=dict(storage='eeprom-v1', github=github, forecast=forecast, version_picker=version not in ['1.10.0','1.11.0-beta.1','1.11.0-beta.2','1.11.0-beta.3']), **fields)
+
+catalog = dict(schema=2, target='esp01s-1m64-dio-80', published='2026-10-03T12:00:00Z',
+               recommended=dict(stable='1.11.0', beta='1.12.0-beta.2'),
+               releases=[release_item('1.11.0'), release_item('1.12.0-beta.2'), release_item(version), release_item('1.11.0-beta.3'),
+                         release_item('1.11.0-beta.1', github=False), release_item('1.10.0', github=False, forecast=False)])
+reboot_mode = 'ok'
+reboot_status_reads = 0
+github_error = 0
+download_bytes = firmware
+github_requests = []
 
 def route_request(route):
+    global reboot_status_reads
     request = route.request
     path = request.url.removeprefix('http://clock.test')
     calls.append((request.method, path))
     headers = request.headers
-    if path in ('/', '/config', '/debug', '/update') and request.method == 'GET':
+    if request.url.startswith('https://raw.githubusercontent.com/'):
+        assert 'authorization' not in headers and 'cookie' not in headers
+        github_requests.append(request.url)
+        if github_error:
+            route.fulfill(status=github_error, body='Unavailable')
+        elif urlsplit(request.url).path.endswith('/releases.json'):
+            route.fulfill(json=catalog)
+        else:
+            assert request.url.endswith('/firmware/' + firmware_digest + '.bin')
+            route.fulfill(content_type='application/octet-stream', body=download_bytes)
+    elif request.url.startswith('https://geocoding-api.open-meteo.com/'):
+        route.fulfill(json={'results': [dict(name='Portimão', latitude=37.14, longitude=-8.53, country='Portugal')]})
+    elif path in ('/', '/config', '/debug', '/update') and request.method == 'GET':
         route.fulfill(status=200, content_type='text/html', body=html)
     elif path == '/api/status':
-        route.fulfill(json=api_status)
+        if reboot_status_reads:
+            reboot_status_reads -= 1
+            route.abort()
+        else:
+            route.fulfill(json=api_status)
     elif path == '/api/debug':
         route.fulfill(json=dict(ntp_attempts=4, ntp_successes=4, gateway='192.168.2.1', dns='192.168.2.1', last_error=''))
     elif path == '/api/i2c-scan':
@@ -51,10 +99,23 @@ def route_request(route):
             if config_error:
                 route.fulfill(status=503, json={'error': 'Settings could not be saved. Try again.'})
             else:
-                config.update({k: v for k, v in request.post_data_json.items() if k not in ('password', 'clear_password')})
-                route.fulfill(json={'status': 'ok', 'restart': False})
+                if not config_ignore:
+                    config.update({k: v for k, v in request.post_data_json.items() if k not in ('password', 'clear_password')})
+                    if config_round_coordinates:
+                        for key in ('latitude', 'longitude'):
+                            config[key] = struct.unpack('f', struct.pack('f', config[key]))[0]
+                route.fulfill(json={'status': 'ok', 'restart': config_restart})
+        elif config_read_error:
+            route.fulfill(status=503, json={'error':'Readback unavailable'})
         else:
             route.fulfill(json=config)
+    elif path == '/api/display':
+        values = request.post_data_json
+        if values['action'] == 'hold': api_status['display']['paused'] = True
+        elif values['action'] == 'resume': api_status['display']['paused'] = False
+        elif values['action'] == 'show': api_status['display'].update(screen=values['screen'], paused=True)
+        elif values['action'] == 'next': api_status['display']['screen'] = (api_status['display']['screen'] + 1) % 3
+        route.fulfill(json={'status': 'ok'})
     elif path == '/maintenance/pin':
         route.fulfill(json={'status': 'shown', 'seconds': 30})
     elif path in ('/api/maintenance/verify', '/api/reboot', '/api/eeprom-clear', '/update'):
@@ -63,6 +124,14 @@ def route_request(route):
             route.fulfill(status=401, json={'error': 'Incorrect PIN. Read the six digits on your clock.'})
         elif path == '/update':
             assert b'name="firmware"' in request.post_data_buffer
+            if b'filename="weather_clock-' in request.post_data_buffer:
+                assert firmware in request.post_data_buffer
+            if not upload_error:
+                match = re.search(rb'filename="weather_clock-v([^"/]+)\.bin"', request.post_data_buffer)
+                if reboot_mode != 'no-reboot':
+                    api_status['system']['uptime'] = 1
+                    if match and reboot_mode != 'wrong-version': api_status['system']['firmware_version'] = match[1].decode()
+                    reboot_status_reads = 1
             route.fulfill(body='Update error: ERROR[10]: Invalid image' if upload_error else 'Update Success! Rebooting...')
         else:
             route.fulfill(json={'status': 'ok'})
@@ -125,10 +194,10 @@ with sync_playwright() as p:
     page.locator('#settings-fields:not([disabled])').wait_for()
     assert page.locator('#save-settings').is_disabled()
     assert page.locator('#discard-settings').is_disabled()
-    # Every setting and the Save action fits a common laptop viewport without scrolling.
+    # Basic controls and Save fit on a laptop; advanced controls are disclosed on demand.
     for width, height in [(1280, 800), (1366, 768)]:
         page.set_viewport_size({'width': width, 'height': height})
-        assert page.evaluate('''() => [...document.querySelectorAll('#settings-fields input, #settings-fields select, #save-settings')].every(el => {
+        assert page.evaluate('''() => [...document.querySelectorAll('#settings-fields > .settings-section input, #settings-fields > .settings-section select, #save-settings')].filter(el => !el.closest('.city-search')).every(el => {
           const rect = el.getBoundingClientRect();
           return rect.width > 0 && rect.height > 0 && rect.top >= 0 && rect.bottom <= innerHeight;
         })''')
@@ -232,6 +301,88 @@ with sync_playwright() as p:
     assert ('POST', '/api/eeprom-clear') not in calls
 
     open_page('/update')
+    page.locator('#release-result').filter(has_text='Update · v1.12.0-beta.2').wait_for()
+    assert not page.evaluate('isSecureContext')
+    assert page.locator('#release-channel').input_value() == 'all'
+    assert page.locator('#firmware-file').is_hidden()
+    screenshot('update-github-desktop')
+    for width in [320, 390]:
+        page.set_viewport_size({'width':width, 'height':844})
+        no_overflow()
+        assert page.locator('#upload-button').is_visible()
+    screenshot('update-github-mobile')
+    page.set_viewport_size({'width':1280, 'height':800})
+    page.locator('#release-channel').select_option('stable')
+    page.locator('#release-result').filter(has_text='Update · v1.11.0').wait_for()
+    assert 'beta' not in page.locator('#release-notes').get_attribute('href')
+    before = len(github_requests)
+    page.locator('#update-pin').fill('999999');page.locator('#upload-button').click()
+    page.locator('#upload-result').filter(has_text='Incorrect PIN').wait_for()
+    assert len(github_requests) == before # no image download until PIN validation
+    assert ('POST', '/update') not in calls
+    download_bytes = firmware[:-1] + b'X'
+    page.locator('#update-pin').fill('123456');page.locator('#upload-button').click()
+    page.locator('#upload-result').filter(has_text='checksum mismatch').wait_for()
+    assert ('POST', '/update') not in calls and page.locator('#update-pin').input_value() == ''
+    download_bytes = firmware + b'X'
+    page.locator('#update-pin').fill('123456');page.locator('#upload-button').click()
+    page.locator('#upload-result').filter(has_text='oversized file').wait_for()
+    assert ('POST', '/update') not in calls
+    download_bytes = firmware
+    # A leftover manual filesystem choice must never affect an online install.
+    page.locator('#image-type').evaluate("el => el.value='filesystem'")
+    page.locator('#update-pin').fill('123-456');page.locator('#upload-button').click()
+    page.locator('#upload-result').filter(has_text='Update complete').wait_for()
+    assert page.locator('#upload-button').is_disabled() and page.locator('#update-pin').input_value() == ''
+    assert calls.count(('POST', '/update')) == 1
+    calls.remove(('POST', '/update')) # subsequent manual-upload guards retain their own assertions
+    api_status['system'] = deepcopy(status['system'])
+    open_page('/update')
+    page.locator('#release-version').select_option(version)
+    page.locator('#release-result').filter(has_text='Reinstall').wait_for()
+    assert page.locator('#upload-button').is_disabled()
+    page.locator('#release-confirm').check()
+    assert page.locator('#upload-button').is_enabled()
+    page.locator('#release-channel').select_option('beta')
+    assert all('beta' in o for o in page.locator('#release-version option').all_text_contents())
+    page.locator('#release-version').select_option('1.11.0-beta.3')
+    assert 'latest-release updates remain' in page.locator('#release-impact').inner_text()
+    page.locator('#release-version').select_option('1.11.0-beta.1')
+    assert 'GitHub updates will be unavailable' in page.locator('#release-impact').inner_text()
+    assert 'UV' not in page.locator('#release-impact').inner_text()
+    assert not page.locator('#release-confirm').is_checked()
+    page.locator('#release-channel').select_option('stable')
+    page.locator('#release-version').select_option('1.10.0')
+    assert 'Downgrade' in page.locator('#release-result').inner_text()
+    assert 'UV' in page.locator('#release-impact').inner_text()
+    assert 'manually' in page.locator('#release-impact').inner_text()
+    screenshot('update-downgrade-desktop')
+    page.locator('#release-confirm').check()
+    assert page.locator('#upload-button').is_enabled()
+    # Unknown settings / withdrawn builds stay visible but cannot be installed.
+    catalog['releases'][-1]['profile']['storage'] = 'unknown'
+    page.locator('#check-release').click()
+    page.locator('#release-version').select_option('1.10.0')
+    assert 'compatibility is unknown' in page.locator('#release-impact').inner_text()
+    assert page.locator('#upload-button').is_disabled()
+    catalog['releases'][-1]['profile']['storage'] = 'eeprom-v1'
+    catalog['releases'][-1]['status'] = 'withdrawn'
+    page.locator('#check-release').click()
+    page.locator('#release-version').select_option('1.10.0')
+    assert 'Withdrawn' in page.locator('#release-impact').inner_text()
+    assert page.locator('#upload-button').is_disabled()
+    catalog['releases'][-1]['status'] = 'available'
+    catalog['target'] = 'esp32'
+    page.locator('#check-release').click()
+    page.locator('#release-result').filter(has_text='incompatible').wait_for()
+    assert page.locator('#upload-button').is_disabled()
+    catalog['target'] = 'esp01s-1m64-dio-80'
+    github_error = 404
+    page.locator('#check-release').click()
+    page.locator('#release-result').filter(has_text='unavailable (404)').wait_for()
+    assert page.locator('#upload-button').is_disabled()
+    github_error = 0
+    page.locator('#update-source').select_option('file')
     assert page.locator('#upload-button').is_disabled()
     page.locator('#firmware-file').set_input_files({'name': 'empty.bin', 'mimeType': 'application/octet-stream', 'buffer': b''})
     assert page.locator('#upload-button').is_disabled()
@@ -259,6 +410,140 @@ with sync_playwright() as p:
     assert page.evaluate('localStorage.length + sessionStorage.length') == 0
     assert not any('123456' in url or '123-456' in url for _, url in calls)
     assert context.cookies() == []
+    # Same-version reinstall must not succeed merely because the version matches.
+    for mode in ['no-reboot', 'wrong-version', 'ok']:
+        api_status['system'] = deepcopy(status['system'])
+        reboot_mode = mode
+        open_page('/update')
+        page.locator('#release-version').select_option(version if mode != 'wrong-version' else '1.12.0-beta.2')
+        if mode != 'wrong-version': page.locator('#release-confirm').check()
+        page.evaluate('window.setTimeout = ((native) => (fn, ms, ...args) => native(fn, ms === 2000 || ms === 3000 ? 5 : ms, ...args))(window.setTimeout)')
+        page.locator('#update-pin').fill('123456'); page.locator('#upload-button').click()
+        page.locator('#upload-result').filter(has_text='Update complete' if mode == 'ok' else 'could not be confirmed').wait_for()
+        assert page.locator('#upload-button').is_disabled()
+        assert page.locator('#update-pin').input_value() == ''
+    reboot_mode = 'ok'
+    # New controls use explicit API actions and keep the weather's canonical units.
+    api_status.update(deepcopy(status))
+    open_page('/')
+    page.locator('#screen-hold').click()
+    page.locator('#screen-hold').filter(has_text='Resume rotation').wait_for()
+    page.locator('#active-screen').select_option('1')
+    page.locator('#screen-result').filter(has_text='selected and held').wait_for()
+    assert api_status['display']['screen'] == 1 and api_status['display']['paused']
+    page.locator('#screen-hold').click()
+    page.locator('#screen-hold').filter(has_text='Hold').wait_for()
+    page.locator('.forecast-panel summary').click()
+    assert '60%' in page.locator('#hourly-forecast').inner_text()
+    assert '4.2' in page.locator('#daily-forecast').inner_text()
+    assert 'today 4 · Moderate · tomorrow 6' in page.locator('#uv-summary').inner_text()
+    original_days = deepcopy(api_status['forecast']['days'])
+    for value, level in [(0, 'Low'), (2.5, 'Moderate'), (6.2, 'High'), (7.8, 'Very high'), (11, 'Extreme')]:
+        api_status['forecast']['days'][0]['uv'] = value
+        page.locator('#refresh').click()
+        page.locator('#uv-summary').filter(has_text=f'today {int(value + 0.5)} · {level}').wait_for()
+    api_status['forecast']['days'][0]['uv'] = -1
+    page.locator('#refresh').click();page.locator('#uv-summary').filter(has_text='today —').wait_for()
+    assert 'tomorrow 6' in page.locator('#uv-summary').inner_text()
+    original_epoch = api_status['time']['epoch']
+    api_status['time']['epoch'] += 86400
+    page.locator('#refresh').click();page.locator('#uv-summary').filter(has_text='today 6 · High · tomorrow —').wait_for()
+    api_status['time']['epoch'] = original_epoch
+    api_status['forecast']['days'] = original_days
+    api_status['weather']['stale'] = True
+    page.locator('#refresh').click();page.locator('#uv-summary').filter(has_text='Saved forecast').wait_for()
+    api_status['weather']['stale'] = False
+
+    api_status['units'] = dict(temperature=1, wind=1)
+    page.locator('#refresh').click()
+    page.locator('#weather-unit').filter(has_text='°F').wait_for()
+    assert page.locator('#weather-temp').inner_text() == '72.3'
+    assert 'm/s' in page.locator('#weather-wind').inner_text()
+    screenshot('forecast-desktop')
+    with page.expect_download() as download_info:
+        page.locator('#download-diagnostics').evaluate('el => el.click()')
+    report = json.loads(Path(download_info.value.path()).read_text())
+    assert report['firmware'] == version
+    assert not any(key in report for key in ('ssid', 'ip', 'hostname', 'chip_id', 'password', 'pin', 'city', 'latitude'))
+    open_page('/config')
+    page.locator('#settings-fields:not([disabled])').wait_for()
+    before_updates = len(updates)
+    page.locator('#wifi-password').fill('pending-secret')
+    page.locator('#screen-preset').select_option('weather')
+    assert page.locator('[name=show_uv]').is_checked()
+    assert page.locator('[name=clock_weather]').is_checked()
+    assert page.locator('[name=show_rain]').is_checked()
+    assert page.locator('#wifi-password').input_value() == 'pending-secret'
+    page.locator('#discard-settings').click()
+    assert not page.locator('[name=show_rain]').is_checked()
+    page.locator('#import-file').set_input_files({'name': 'settings.json', 'mimeType': 'application/json',
+        'buffer': json.dumps(dict(clock_weather=True, show_rain=True, screen_clock_sec=30, password='ignore-this-secret')).encode()})
+    page.locator('#import-dialog[open]').wait_for()
+    assert 'ignore-this-secret' not in page.locator('#import-preview').inner_text()
+    assert len(updates) == before_updates
+    page.locator('#apply-import').click()
+    assert page.locator('[name=clock_weather]').is_checked()
+    assert page.locator('#wifi-password').input_value() == '' and len(updates) == before_updates
+    page.locator('.extra-settings summary').click()
+    assert page.locator('[name=screen_clock_sec]').input_value() == '30'
+    page.locator('#save-settings').click()
+    page.locator('#settings-result').filter(has_text='Saved.').wait_for()
+    assert updates[-1] == dict(clock_weather=True, show_rain=True, screen_clock_sec=30)
+    screenshot('advanced-settings-desktop')
+    page.locator('.city-search summary').click()
+    page.locator('#city-query').fill('Portimao')
+    page.locator('#city-search').click()
+    page.locator('#city-results button').click()
+    assert page.locator('#latitude').input_value() == '37.14'
+    assert page.locator('#city').input_value() == 'Portimão'
+    assert len(updates) == before_updates + 1
+    page.locator('#discard-settings').click()
+    api_status.update(deepcopy(status))
+    # A successful POST alone must not turn unsaved screen choices into "Saved".
+    config['show_wind'] = False
+    open_page('/config')
+    page.locator('#settings-fields:not([disabled])').wait_for()
+    page.locator('#screen-preset').select_option('glance')
+    page.locator('#settings-fields details').evaluate_all('items => items.forEach(el => el.open = true)')
+    page.locator('[name=show_wind]').check()
+    assert page.locator('#screen-preset').input_value() == 'custom'
+    config_ignore = True
+    page.locator('#save-settings').click()
+    page.locator('#settings-result').filter(has_text='Some settings were not saved').wait_for()
+    assert page.locator('[name=show_wind]').is_checked() and page.locator('#save-settings').is_enabled()
+    assert not config['show_wind']
+    config_ignore = False; config_read_error = True
+    page.locator('#save-settings').click()
+    page.locator('#settings-result').filter(has_text='Could not verify saved settings').wait_for()
+    assert page.locator('[name=show_wind]').is_checked() and page.locator('#save-settings').is_enabled()
+    config_read_error = False
+    page.locator('#save-settings').click()
+    page.locator('#settings-result').filter(has_text='Saved.').wait_for()
+    assert config['show_wind'] and page.locator('#save-settings').is_disabled()
+    # Coordinates round to float32 on the ESP; this must not report a failed save.
+    config_round_coordinates = True
+    page.locator('#latitude').fill('89.1234567')
+    page.locator('#longitude').fill('-179.1234567')
+    page.locator('#save-settings').click()
+    page.locator('#settings-result').filter(has_text='Saved.').wait_for()
+    assert config['longitude'] != -179.1234567 and page.locator('#save-settings').is_disabled()
+    config_round_coordinates = False
+    # Network changes reboot immediately: a readback would fail after a good save.
+    config_restart = True; config_read_error = True
+    page.locator('[name=hostname]').fill('bedroom-clock')
+    before_reads = calls.count(('GET', '/api/config'))
+    page.locator('#save-settings').click()
+    page.locator('#settings-result').filter(has_text='Clock restarting').wait_for()
+    assert calls.count(('GET', '/api/config')) == before_reads
+    config_restart = False; config_read_error = False
+    # The main page respects the availability returned after settings are saved.
+    api_status['display']['available'][6] = True
+    open_page('/')
+    assert not page.locator('#active-screen option[value="6"]').is_disabled()
+    page.locator('#active-screen').select_option('6')
+    page.locator('#screen-result').filter(has_text='selected and held').wait_for()
+    assert api_status['display']['screen'] == 6
+    api_status.update(deepcopy(status))
     # No overflow on narrow phones, with the same real HTML/CSS/JS.
     for width in (320, 390, 640, 768, 900):
         # 640×400 also exercises the reflow viewport of a 1280×800 screen at 200% zoom.
@@ -269,12 +554,14 @@ with sync_playwright() as p:
             if width == 390: screenshot(name + '-mobile')
             if path == '/config' and width in (320, 640):
                 page.locator('#settings-fields:not([disabled])').wait_for()
-                page.locator('#brightness').focus()
+                page.locator('#settings-fields details').evaluate_all('items => items.forEach(el => el.open = true)')
+                page.locator('#screen-preset').focus()
                 reached = set()
                 for _ in range(80):
                     if not page.evaluate("document.querySelector('#settings-fields').contains(document.activeElement)"):
                         break
-                    reached.add(page.evaluate('document.activeElement.name'))
+                    if page.evaluate('document.activeElement.matches("input, select")'):
+                        reached.add(page.evaluate('document.activeElement.id || document.activeElement.name'))
                     # Focused fields must scroll above the sticky Save bar, not underneath it.
                     focus = page.evaluate('''() => {
                       const rect = document.activeElement.getBoundingClientRect();
@@ -286,4 +573,4 @@ with sync_playwright() as p:
                 assert len(reached) == page.locator('#settings-fields input, #settings-fields select').count(), reached
     assert not errors, errors
     browser.close()
-print('PASS: compact desktop/mobile UI, all settings visible at 1280×800 and 1366×768, keyboard controls, dirty/discard/retry, settings round-trip, hidden-tab polling, stale/unsynced/escaped data, PIN-only maintenance, empty upload, preflight auth, core upload errors, no credential storage, no overflow')
+print('PASS: minified embedded UI, basic settings fit laptop, advanced controls accessible, dirty/discard/retry/import/presets, forecast/units/display control, hidden-tab polling, PIN/update guards, no credential storage or overflow')

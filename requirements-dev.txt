@@ -1,0 +1,4 @@
+# Build/test host only; never installed on the device or bundled in the web UI.
+ruff==0.16.10
+clang-format==23.1.2
+playwright==1.58.0
