@@ -3,6 +3,20 @@
   "target": "esp01s-1m64-dio-80",
   "releases": [
     {
+      "version": "1.11.0",
+      "size": 478944,
+      "sha256": "92bd527ef60fe90c33597a761df888c8cc11972eaf64ea03541dfcac8d100a89",
+      "published": "2026-11-03T12:15:23Z",
+      "revision": "4f3a7083080e",
+      "profile": {
+        "storage": "eeprom-v1",
+        "github": true,
+        "forecast": true,
+        "version_picker": true
+      },
+      "status": "available"
+    },
+    {
       "version": "1.11.0-beta.4",
       "size": 477664,
       "sha256": "1f181f53380c07fcaf319a7cf49c9f3b06a251a62969c0817b013d666358bd51",
@@ -74,8 +88,8 @@
     }
   ],
   "recommended": {
-    "stable": "1.10.0",
+    "stable": "1.11.0",
     "beta": "1.11.0-beta.4"
   },
-  "published": "2026-10-03T18:59:55+00:00"
+  "published": "2026-11-03T12:15:34+00:00"
 }
