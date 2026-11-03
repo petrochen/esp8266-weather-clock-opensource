@@ -37,6 +37,7 @@ jobs:
       - name: Release channel regressions
         run: |
           node tests/test_releases.cjs
+          node tests/test_i18n.cjs
           python3 tests/test_update_channel.py
       - name: OLED raster regressions
         run: python3 tests/render_display.py --arduinojson "$HOME/Arduino/libraries/ArduinoJson/src" --gfx "$HOME/Arduino/libraries/Adafruit_GFX_Library" --sanitize

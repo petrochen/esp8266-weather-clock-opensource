@@ -10,7 +10,7 @@
 <body>
   <a class="skip" href="#main">Skip to content</a>
   <header class="header shell">
-    <a class="brand" href="/" aria-label="Weather Clock home"><span class="brand-mark" aria-hidden="true">◷</span><span>Weather Clock<small><span id="device-name">TJ-56-654</span><span id="firmware-version">ESP8266</span></small></span></a>
+    <a class="brand" href="/" aria-label="Weather Clock home" data-i18n-skip><span class="brand-mark" aria-hidden="true">◷</span><span>Weather Clock<small><span id="device-name">TJ-56-654</span><span id="firmware-version">ESP8266</span></small></span></a>
     <nav aria-label="Main navigation"><a href="/" data-page="clock">Clock</a><a href="/config" data-page="settings">Settings</a><a href="/update" data-page="update">Update</a></nav>
     <p id="connection" class="connection" role="status">Connecting…</p>
   </header>
@@ -39,7 +39,7 @@
     </section>
 
     <section id="settings-page" hidden aria-labelledby="settings-title">
-      <div class="page-heading"><h1 id="settings-title">Settings</h1><div class="actions"><button type="button" class="secondary" id="import-settings">Import JSON</button><a href="/api/config" download="clock-config.json">Export JSON</a><input type="file" id="import-file" accept=".json,application/json" hidden></div></div>
+      <div class="page-heading"><h1 id="settings-title">Settings</h1><div class="actions"><label class="sr-only" for="language">Language</label><select id="language" name="language" form="settings-form" style="width:auto" disabled data-i18n-skip title="Translations are loaded from GitHub by your browser; without internet access the page stays in English."><option value="0">English</option><option value="1">Italiano</option><option value="2">Deutsch</option><option value="3">Français</option></select><button type="button" class="secondary" id="import-settings">Import JSON</button><a href="/api/config" download="clock-config.json">Export JSON</a><input type="file" id="import-file" accept=".json,application/json" hidden></div></div>
       <form id="settings-form">
         <fieldset disabled id="settings-fields">
           <legend class="sr-only">Clock configuration</legend>

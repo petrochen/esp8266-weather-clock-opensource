@@ -10,8 +10,8 @@ module.exports = [
   },
   {
     files: ['web/app.js'],
-    // releases.js is concatenated before app.js by tools/minify_web.cjs.
-    languageOptions: {globals: {releases: 'readonly'}},
+    // releases.js and i18n.js are concatenated before app.js by tools/minify_web.cjs.
+    languageOptions: {globals: {releases: 'readonly', i18n: 'readonly'}},
   },
   {
     files: ['**/*.cjs'],

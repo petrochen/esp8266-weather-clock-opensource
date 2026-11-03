@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Web interface in Italian, German and French, besides English (#16). Choose the
+  language at the top of Settings and save; it applies at once, on every page and
+  in every browser, because the clock stores it (`language` in `/api/config` and
+  `system.language` in `/api/status`). The dictionaries (`web/i18n/*.json`) are
+  downloaded from this repository by the browser — the 1 MB flash has no room for
+  them — so without internet access the page stays in English and says so.
+  Dates on the Clock page follow the chosen language. The OLED is not translated:
+  its font has no room for a second alphabet.
+- `tests/test_i18n.cjs` keeps the dictionaries complete and in sync with the UI
+  sources; the browser regression switches through all four languages.
+
+### Changed
+
+- The feature-settings record uses one former reserved byte for the language;
+  older firmware reads it as zero (English) and keeps every other setting.
+- Release transition notes are returned as separate sentences (`notes`) so the
+  UI can translate them; the joined `note` string remains.
+
 ## [1.11.0-beta.4] - 2026-10-03 (pre-release)
 
 ### Added

@@ -45,6 +45,21 @@ int main() {
   EEPROM.put(FEATURE_SETTINGS_ADDR, broken); loadFeatureSettings(); assert(featureSettings.night_brightness == 0);
   broken = FeatureSettings(); broken.seconds[6] = 255;
   EEPROM.put(FEATURE_SETTINGS_ADDR, broken); loadFeatureSettings(); assert(featureSettings.seconds[6] == 0);
+  // Web UI language: a former reserved byte (0 = English on every older record).
+  static_assert(offsetof(FeatureSettings, language) == 25 && sizeof(FeatureSettings) == 32, "Language reuses a reserved byte");
+  for (const char* bad : {"{\"language\":4}", "{\"language\":-1}", "{\"language\":\"it\"}", "{\"language\":1.5}"}) {
+    deserializeJson(doc, bad); auto before = featureSettings;
+    assert(!updateFeatureSettings(featureSettings, doc.as<JsonObjectConst>(), error));
+    assert(!memcmp(&before, &featureSettings, sizeof(before)));
+  }
+  deserializeJson(doc, "{\"language\":3}");
+  assert(updateFeatureSettings(featureSettings, doc.as<JsonObjectConst>(), error) && featureSettings.language == 3);
+  doc.clear(); exportFeatureSettings(featureSettings, doc); assert(doc["language"].as<int>() == 3);
+  assert(saveSettings(config, nightSettings, &featureSettings)); loadFeatureSettings(); assert(featureSettings.language == 3);
+  // A language index from newer firmware falls back to English without resetting other features.
+  FeatureSettings future; future.show_wind = 1; future.language = 200;
+  EEPROM.put(FEATURE_SETTINGS_ADDR, future); loadFeatureSettings();
+  assert(featureSettings.language == 0 && featureSettings.show_wind);
 
   ExternalCard card;
   deserializeJson(doc, R"({"title":"Living room","value":"920","unit":"ppm","ttl":60})");

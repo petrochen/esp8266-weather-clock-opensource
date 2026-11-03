@@ -38,6 +38,8 @@ void ICACHE_FLASH_ATTR loadFeatureSettings() {
     saved.external_enabled <= 1 && saved.sun_countdown <= 1 && saved.show_comfort <= 1 &&
     saved.show_rain <= 1 && saved.show_daily <= 1 && saved.show_wind <= 1 &&
     saved.show_uv <= 1 && saved.screen_uv_sec <= 120;
+  // A language added by newer firmware must not discard every other feature setting.
+  if (saved.language >= LANGUAGE_COUNT) saved.language = 0;
   featureSettings = valid ? saved : FeatureSettings();
 }
 

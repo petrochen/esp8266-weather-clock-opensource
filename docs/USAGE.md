@@ -212,3 +212,19 @@ In **Settings → Restart & reset**, choose the action, show/read the PIN, and c
 The physical recovery screen says `WiFi reset`; the first v1.10.0 build and older builds
 say `FACTORY RESET!`. That path resets WiFi only.
 For timing and setup instructions, see [Recovery and reset](INSTALLATION.md#recovery-and-reset).
+
+## Language
+
+The web pages are available in English, Italiano, Deutsch and Français. Choose the
+language in the selector at the top of **Settings** and press **Save settings**; it
+applies immediately, on every page and from every browser, because the clock stores
+the choice. The selector always lists the languages by their own names, so you can
+find your way back from an unfamiliar one. Dates on the Clock page follow the
+language; numbers, units and the JSON API do not change.
+
+The clock itself only keeps the language index. Your browser downloads the
+dictionary (`web/i18n/<code>.json`) from this repository on GitHub, because the
+1 MB flash has no room for it. Without internet access in the browser the page stays
+in English and shows *Translation unavailable, showing English* next to the
+connection state; nothing is cached in the browser. The OLED display is not
+translated: its font has no room for a second alphabet.

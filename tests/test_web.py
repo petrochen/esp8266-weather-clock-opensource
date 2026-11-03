@@ -33,6 +33,10 @@ config = dict(firmware_version=version, ssid='Home', hostname='living-room-clock
 config.update(clock_weather=False, dissolve=True, temperature_unit=0, wind_unit=0, night_action=0, night_brightness=0,
               external_enabled=False, sun_countdown=False, show_comfort=False, show_rain=False, show_daily=False, show_wind=False, show_uv=False)
 config.update({'screen_' + key + '_sec': 0 for key in ['clock', 'weather', 'sun', 'comfort', 'rain', 'daily', 'wind', 'uv']})
+config['language'] = 0
+status['system']['language'] = 0
+i18n_error = 0
+i18n_requests = []
 status['display'].update(screen=0, paused=False, available=[True, True, True, False, False, False, False, False, False])
 status['units'] = dict(temperature=0, wind=0)
 status['weather'].update(comfort_valid=True, feels_like=21.2, humidity=68, wind_direction=270, is_day=True, source_epoch=1791031500)
@@ -71,6 +75,15 @@ def route_request(route):
     headers = request.headers
     if request.url.startswith('https://raw.githubusercontent.com/'):
         assert 'authorization' not in headers and 'cookie' not in headers
+        if '/web/i18n/' in request.url:
+            # Translations come from the repository, exactly as published.
+            i18n_requests.append(request.url)
+            code = request.url.rsplit('/', 1)[1].removesuffix('.json')
+            if i18n_error:
+                route.fulfill(status=i18n_error, body='Unavailable')
+            else:
+                route.fulfill(content_type='application/json', body=(root / 'web/i18n' / (code + '.json')).read_bytes())
+            return
         github_requests.append(request.url)
         if github_error:
             route.fulfill(status=github_error, body='Unavailable')
@@ -162,7 +175,7 @@ with sync_playwright() as p:
         assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
     def open_page(path):
         page.goto('http://clock.test' + path)
-        page.locator('#connection').filter(has_text='Connected').wait_for()
+        page.locator('#connection').filter(has_text='192.168.2.149').wait_for()  # language-neutral
     open_page('/')
     assert page.locator('#weather-temp').inner_text() == '22.4'
     assert page.locator('#weather-city').inner_text() == 'Portimão'
@@ -544,6 +557,62 @@ with sync_playwright() as p:
     page.locator('#screen-result').filter(has_text='selected and held').wait_for()
     assert api_status['display']['screen'] == 6
     api_status.update(deepcopy(status))
+    # Language: stored on the clock, dictionary fetched by the browser, English fallback.
+    open_page('/config')
+    page.locator('#settings-fields:not([disabled])').wait_for()
+    assert page.evaluate('document.documentElement.lang') == 'en' and not i18n_requests
+    page.locator('#language').select_option('1')
+    page.locator('#settings-result').filter(has_text='Unsaved changes').wait_for()
+    page.locator('#save-settings').click()
+    page.locator('#settings-result').filter(has_text='Salvato.').wait_for()
+    assert updates[-1] == dict(language=1) and config['language'] == 1
+    assert i18n_requests[-1].endswith('/main/web/i18n/it.json') and len(i18n_requests) == 1
+    assert page.evaluate('document.documentElement.lang') == 'it'
+    assert page.locator('#settings-title').inner_text() == 'Impostazioni'
+    assert page.locator('#save-settings').inner_text() == 'Salva impostazioni'
+    assert page.get_by_label('Luminosità', exact=True).count() == 1
+    assert page.locator('nav [data-page=update]').inner_text() == 'Aggiornamento'
+    assert page.locator('#language option[value="2"]').inner_text() == 'Deutsch'  # native names stay
+    assert page.locator('[name=night_start]').get_attribute('aria-label') == 'Inizio della modalità notte'
+    assert page.title().startswith('Impostazioni')
+    screenshot('settings-italian')
+    # Every page reads the language from /api/status; dates follow the locale.
+    api_status['system']['language'] = 1
+    open_page('/')
+    page.locator('#connection').filter(has_text='Connesso').wait_for()
+    assert page.locator('#clock-title').inner_text() == 'Stato del dispositivo'
+    assert page.locator('#weather-description').inner_text() == 'Prevalentemente sereno'
+    assert page.locator('#clock-date').inner_text() == 'sabato 3 ottobre'
+    page.locator('.forecast-panel summary').click()
+    assert 'Percepita' in page.locator('#weather-extra').inner_text()
+    assert 'ott' in page.locator('#daily-forecast').inner_text()
+    screenshot('clock-italian')
+    # Switching languages twice restores the originals before translating again.
+    api_status['system']['language'] = 2
+    page.locator('#refresh').click()
+    page.locator('#clock-title').filter(has_text='Gerätestatus').wait_for()
+    assert page.locator('#weather-description').inner_text() == 'Überwiegend klar'
+    api_status['system']['language'] = 3
+    page.locator('#refresh').click()
+    page.locator('#clock-title').filter(has_text='État de l’appareil').wait_for()
+    assert page.locator('nav [data-page=settings]').inner_text() == 'Réglages'
+    assert page.evaluate('document.documentElement.lang') == 'fr'
+    api_status['system']['language'] = 0
+    page.locator('#refresh').click()
+    page.locator('#clock-title').filter(has_text='Device status').wait_for()
+    assert page.locator('#weather-description').inner_text() == 'Mainly clear'
+    assert page.evaluate('document.documentElement.lang') == 'en'
+    # Without GitHub the page stays English and says so; nothing is cached in the browser.
+    i18n_error = 404
+    api_status['system']['language'] = 1
+    open_page('/')
+    page.locator('#connection').filter(has_text='Translation unavailable').wait_for()
+    assert page.locator('#clock-title').inner_text() == 'Device status'
+    assert page.evaluate('document.documentElement.lang') == 'en'
+    i18n_error = 0
+    api_status['system']['language'] = 0
+    config['language'] = 0
+    assert page.evaluate('localStorage.length + sessionStorage.length') == 0
     # No overflow on narrow phones, with the same real HTML/CSS/JS.
     for width in (320, 390, 640, 768, 900):
         # 640×400 also exercises the reflow viewport of a 1280×800 screen at 200% zoom.
@@ -573,4 +642,4 @@ with sync_playwright() as p:
                 assert len(reached) == page.locator('#settings-fields input, #settings-fields select').count(), reached
     assert not errors, errors
     browser.close()
-print('PASS: minified embedded UI, basic settings fit laptop, advanced controls accessible, dirty/discard/retry/import/presets, forecast/units/display control, hidden-tab polling, PIN/update guards, no credential storage or overflow')
+print('PASS: minified embedded UI, basic settings fit laptop, advanced controls accessible, dirty/discard/retry/import/presets, forecast/units/display control, hidden-tab polling, PIN/update guards, language switching with English fallback, no credential storage or overflow')

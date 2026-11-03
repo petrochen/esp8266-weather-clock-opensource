@@ -74,8 +74,10 @@ struct FeatureSettings {
   uint8_t external_enabled = 0, sun_countdown = 0;
   uint8_t show_comfort = 0, show_rain = 0, show_daily = 0, show_wind = 0;
   uint8_t show_uv = 0, screen_uv_sec = 0; // former reserved bytes, preserving the record ABI
-  uint8_t reserved[7] = {};
+  uint8_t language = 0; // web UI language index (en, it, de, fr); former reserved byte, 0 = English
+  uint8_t reserved[6] = {};
 };
+constexpr uint8_t LANGUAGE_COUNT = 4; // en, it, de, fr — order is stored in EEPROM, append only
 static_assert(sizeof(FeatureSettings) == 32, "Stable feature record layout");
 
 struct ForecastHour {

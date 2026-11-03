@@ -106,7 +106,7 @@ I decided to write a replacement I could understand and keep improving. The goal
 | 🌦️ Weather | Open-Meteo temperature, condition icons, wind and calculated sunrise/sunset; no API key |
 | 📺 Display | Rotating time, weather and sun screens; brightness, orientation and an optional night schedule |
 | 🔄 Updates | Browser upload with a six-digit PIN; ArduinoOTA remains available |
-| 🖥️ Web interface | Compact English desktop/mobile panel with grouped settings, Save/Discard, PIN updates and on-demand diagnostics |
+| 🖥️ Web interface | Compact desktop/mobile panel in English, Italiano, Deutsch or Français, with grouped settings, Save/Discard, PIN updates and on-demand diagnostics |
 | 🔌 Integrations | Local JSON API for time, weather, settings and device status |
 
 Weather failures keep the last good reading, marked as stale. Time and weather requests recover through bounded retries. The clock can show an unsynchronized-time placeholder instead of pretending an epoch is the current time.

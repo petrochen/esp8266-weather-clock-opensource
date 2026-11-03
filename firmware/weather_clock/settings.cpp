@@ -168,7 +168,8 @@ static const FeatureField featureFields[] = {
   {"show_daily", &FeatureSettings::show_daily, 0},
   {"show_uv", &FeatureSettings::show_uv, 0},
   {"screen_uv_sec", &FeatureSettings::screen_uv_sec, 120},
-  {"show_wind", &FeatureSettings::show_wind, 0}
+  {"show_wind", &FeatureSettings::show_wind, 0},
+  {"language", &FeatureSettings::language, LANGUAGE_COUNT - 1}
 };
 
 bool ICACHE_FLASH_ATTR updateFeatureSettings(FeatureSettings& target, JsonObjectConst values, const char*& error) {

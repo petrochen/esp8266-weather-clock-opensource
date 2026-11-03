@@ -145,6 +145,27 @@ The default suite is read-only. Add `--fuzz` to temporarily exercise non-network
 settings and restore the actual configuration afterward. Host regression tests
 and the pinned build command are documented in [docs/VALIDATION.md](docs/VALIDATION.md).
 
+### Adding a language
+
+The web UI is translated in the browser. English strings in `web/index.html`,
+`web/app.js` and `web/releases.js` are the dictionary keys; `web/i18n/<code>.json`
+maps each one to its translation (`{placeholders}` must be kept). The clock stores
+only a language index, so a new language touches four places:
+
+1. `firmware/weather_clock/config.h`: raise `LANGUAGE_COUNT` (append only — the
+   index is stored in EEPROM).
+2. `web/i18n.js`: append the code to `codes`, its locale to `locales` and the
+   native name to `names`.
+3. `web/index.html`: add the `<option>` to the `#language` selector, in the same
+   order.
+4. Create `web/i18n/<code>.json`. `node tests/test_i18n.cjs --keys` prints every
+   string that needs a translation; `node tests/test_i18n.cjs` fails until the file
+   is complete and free of dead keys.
+
+Keep product names, units and protocol words (PIN, SSID, NTP, JSON) untranslated.
+Translations are fetched from the default branch, so they reach existing clocks as
+soon as they are merged; no firmware release is needed for wording fixes.
+
 ### Recovery (bricked device)
 
 Three quick power cycles recover WiFi access, retaining other settings and the PIN.

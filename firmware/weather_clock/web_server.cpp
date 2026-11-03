@@ -121,6 +121,7 @@ void ICACHE_FLASH_ATTR handleAPIStatus() {
   timeInfo["hour_format_24"] = config.hour_format_24;
   timeInfo["dst_enabled"] = config.dst_enabled;
   systemInfo["firmware_version"] = FIRMWARE_VERSION;
+  systemInfo["language"] = featureSettings.language; // UI translates after the first status read
   displayInfo["night_active"] = isNightModeActive();
   displayInfo["night_dim"] = bool(featureSettings.night_action);
   displayInfo["screen"] = displayMode;

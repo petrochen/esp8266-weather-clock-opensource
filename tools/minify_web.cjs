@@ -5,7 +5,8 @@ const esbuild = require('esbuild');
 const root = path.resolve(__dirname, '..');
 const result = {};
 for (const [key, file, loader] of [['js', 'app.js', 'js'], ['css', 'app.css', 'css']]) {
-  const source = (key === 'js' ? fs.readFileSync(path.join(root, 'web/releases.js'), 'utf8') + '\n' : '') + fs.readFileSync(path.join(root, 'web', file), 'utf8');
+  const prelude = key === 'js' ? ['releases.js', 'i18n.js'].map(name => fs.readFileSync(path.join(root, 'web', name), 'utf8')).join('\n') + '\n' : '';
+  const source = prelude + fs.readFileSync(path.join(root, 'web', file), 'utf8');
   result[key] = esbuild.transformSync(source, {
     loader, minify: true, target: 'es2020', legalComments: 'none', charset: 'utf8'
   }).code;

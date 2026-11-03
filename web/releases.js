@@ -33,12 +33,13 @@ const releases = (() => {
     const order = compare(item.version, installed);
     const action = order < 0 ? 'Downgrade' : order === 0 ? 'Reinstall' : 'Update';
     const allowed = item.status === 'available' && item.profile.storage === 'eeprom-v1';
-    let note = item.status === 'withdrawn' ? 'Withdrawn: ' + (item.reason || 'This build is unavailable.') : !allowed ? 'Settings compatibility is unknown. Installation unavailable.' : 'Basic settings and PIN are retained.';
-    if (allowed && !item.profile.github) note += ' GitHub updates will be unavailable. To return, upload a firmware BIN manually.';
-    if (allowed && item.profile.github && !item.profile.version_picker) note += ' Version selection and rollback will be unavailable; latest-release updates remain.';
-    if (allowed && !item.profile.forecast) note += ' UV and additional beta screens will be unavailable.';
-    if (allowed && item.version.includes('-')) note += ' Beta: experimental firmware.';
-    return {action, allowed, note, confirm: allowed && (order <= 0 || !item.profile.github || !item.profile.forecast)};
+    // Sentences stay separate so the UI can translate each one.
+    const notes = [item.status === 'withdrawn' ? 'Withdrawn: ' + (item.reason || 'This build is unavailable.') : !allowed ? 'Settings compatibility is unknown. Installation unavailable.' : 'Basic settings and PIN are retained.'];
+    if (allowed && !item.profile.github) notes.push('GitHub updates will be unavailable. To return, upload a firmware BIN manually.');
+    if (allowed && item.profile.github && !item.profile.version_picker) notes.push('Version selection and rollback will be unavailable; latest-release updates remain.');
+    if (allowed && !item.profile.forecast) notes.push('UV and additional beta screens will be unavailable.');
+    if (allowed && item.version.includes('-')) notes.push('Beta: experimental firmware.');
+    return {action, allowed, notes, note: notes.join(' '), confirm: allowed && (order <= 0 || !item.profile.github || !item.profile.forecast)};
   }
   async function read(path, limit) {
     const controller = new AbortController(), timer = setTimeout(() => controller.abort(), path.startsWith('firmware/') ? 60000 : 12000);

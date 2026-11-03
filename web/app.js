@@ -1,14 +1,17 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
+  const t = i18n.t;
   const page = location.pathname === '/config' ? 'settings' : location.pathname === '/update' ? 'update' : 'clock';
   $(page + '-page').hidden = false;
   document.querySelector(`[data-page="${page}"]`).setAttribute('aria-current', 'page');
-  document.title = `${page === 'settings' ? 'Settings' : page === 'update' ? 'Update' : 'Time & weather'} · Weather Clock`;
+  const setTitle = () => { document.title = `${t(page === 'settings' ? 'Settings' : page === 'update' ? 'Update' : 'Time & weather')} · Weather Clock`; };
+  setTitle();
   if (location.pathname === '/debug') $('diagnostics').open = true;
   let state, receivedAt = 0, polling = false, busy = false, savedSettings, settingsDirty = false;
   let maintenanceAction = '';
   let releaseCatalog, selectedRelease = null, releaseChecked = false, checkingRelease = false;
+  let translationNote = '';
   const settingsForm = $('settings-form');
   const screenNames = ['Time', 'Weather', 'Sunrise / sunset', 'Outdoor comfort', 'Hourly rain', 'Daily forecast', 'Wind', 'External card', 'UV daytime peak'];
   const durationKeys = ['clock', 'weather', 'sun', 'comfort', 'rain', 'daily', 'wind', 'uv'];
@@ -31,14 +34,22 @@
       const text = await response.text();
       let data;
       try { data = JSON.parse(text); } catch { data = null; }
-      if (!response.ok) throw new Error(data?.error || text || `Request failed (${response.status}).`);
+      if (!response.ok) throw new Error(data?.error || text || t('Request failed ({status}).', {status: response.status}));
       return data;
     } catch (error) {
-      if (error.name === 'AbortError') throw new Error('The clock took too long to respond. Try again.', {cause: error});
-      if (error instanceof TypeError) throw new Error('Cannot reach the clock. Check its power and Wi-Fi connection.', {cause: error});
+      if (error.name === 'AbortError') throw new Error(t('The clock took too long to respond. Try again.'), {cause: error});
+      if (error instanceof TypeError) throw new Error(t('Cannot reach the clock. Check its power and Wi-Fi connection.'), {cause: error});
       throw error;
     } finally { clearTimeout(timeout); }
   }
+  // Switch the page language to the firmware setting; English stays when the
+  // dictionary cannot be downloaded, with a short note next to the connection state.
+  async function applyLanguage(index) {
+    const failed = await i18n.select(index);
+    translationNote = failed ? t('Translation unavailable, showing English') : '';
+    setTitle();
+  }
+  const connectionText = () => `${t('Connected')} · ${state.wifi.ip}${translationNote ? ' · ' + translationNote : ''}`;
   const pad = n => String(n).padStart(2, '0');
   const degrees = value => state?.units?.temperature ? value * 1.8 + 32 : value;
   const degreeUnit = () => state?.units?.temperature ? '°F' : '°C';
@@ -58,18 +69,18 @@
     const uv = ahead => (state.forecast?.days || []).find(day => day.epoch && dayNumber(day.epoch) === today + ahead)?.uv;
     const format = value => Number.isFinite(value) && value >= 0 ? String(Math.round(value)) : '—';
     const value = uv(0), rounded = Math.round(value);
-    const level = rounded < 3 ? 'Low' : rounded < 6 ? 'Moderate' : rounded < 8 ? 'High' : rounded < 11 ? 'Very high' : 'Extreme';
+    const level = t(rounded < 3 ? 'Low' : rounded < 6 ? 'Moderate' : rounded < 8 ? 'High' : rounded < 11 ? 'Very high' : 'Extreme');
     target.textContent = weather.enabled && weather.valid && state.time.ntp_synced
-      ? `Daytime UV peak · today ${format(value)}${format(value) === '—' ? '' : ' · ' + level} · tomorrow ${format(uv(1))}${weather.stale ? ' · Saved forecast' : ''}`
-      : 'Daytime UV peak · waiting for forecast and synchronized time';
+      ? `${t('Daytime UV peak')} · ${t('today')} ${format(value)}${format(value) === '—' ? '' : ' · ' + level} · ${t('tomorrow')} ${format(uv(1))}${weather.stale ? ' · ' + t('Saved forecast') : ''}`
+      : t('Daytime UV peak · waiting for forecast and synchronized time');
   }
   function renderForecast() {
     const weather = state.weather;
     renderUV();
     const details = [];
-    if (weather.valid && weather.comfort_valid) details.push(`Feels like ${degrees(weather.feels_like).toFixed(1)}${degreeUnit()}`);
-    if (weather.valid && weather.humidity >= 0) details.push(`Outdoor humidity ${weather.humidity}%`);
-    $('weather-extra').textContent = details.join(' · ') || 'Waiting for outdoor details.';
+    if (weather.valid && weather.comfort_valid) details.push(t('Feels like {value}', {value: degrees(weather.feels_like).toFixed(1) + degreeUnit()}));
+    if (weather.valid && weather.humidity >= 0) details.push(t('Outdoor humidity {value}%', {value: weather.humidity}));
+    $('weather-extra').textContent = details.join(' · ') || t('Waiting for outdoor details.');
     function row(target, values) {
       const tr = document.createElement('tr');
       values.forEach(value => { const td = document.createElement('td'); td.textContent = value; tr.append(td); });
@@ -78,14 +89,14 @@
     $('hourly-forecast').replaceChildren(); $('daily-forecast').replaceChildren();
     for (const hour of state.forecast?.hours || []) {
       if (state.time.ntp_synced && hour.epoch <= state.time.epoch) continue;
-      row($('hourly-forecast'), [forecastDate(hour.epoch).toLocaleTimeString('en-GB', {hour: '2-digit', minute: '2-digit', timeZone: 'UTC'}), `${degrees(hour.temperature).toFixed(0)}${degreeUnit()}`, hour.rain >= 0 ? hour.rain + '%' : '—']);
+      row($('hourly-forecast'), [forecastDate(hour.epoch).toLocaleTimeString(i18n.locale(), {hour: '2-digit', minute: '2-digit', timeZone: 'UTC'}), `${degrees(hour.temperature).toFixed(0)}${degreeUnit()}`, hour.rain >= 0 ? hour.rain + '%' : '—']);
     }
     for (const day of state.forecast?.days || []) if (day.valid) {
       if (state.time.ntp_synced && forecastDate(day.epoch).toISOString().slice(0, 10) < forecastDate(state.time.epoch).toISOString().slice(0, 10)) continue;
-      row($('daily-forecast'), [forecastDate(day.epoch).toLocaleDateString('en-GB', {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'}), `${degrees(day.low).toFixed(0)} / ${degrees(day.high).toFixed(0)}${degreeUnit()}`, day.uv >= 0 ? day.uv.toFixed(1) : '—']);
+      row($('daily-forecast'), [forecastDate(day.epoch).toLocaleDateString(i18n.locale(), {weekday: 'short', day: 'numeric', month: 'short', timeZone: 'UTC'}), `${degrees(day.low).toFixed(0)} / ${degrees(day.high).toFixed(0)}${degreeUnit()}`, day.uv >= 0 ? day.uv.toFixed(1) : '—']);
     }
-    for (const id of ['hourly-forecast', 'daily-forecast']) if (!$(id).children.length) row($(id), ['No forecast available', '—', '—']);
-    $('external-card').textContent = state.card?.active ? `${state.card.title}: ${state.card.value} ${state.card.unit} · expires in ${state.card.remaining_seconds}s` : '';
+    for (const id of ['hourly-forecast', 'daily-forecast']) if (!$(id).children.length) row($(id), [t('No forecast available'), '—', '—']);
+    $('external-card').textContent = state.card?.active ? `${state.card.title}: ${state.card.value} ${state.card.unit} · ${t('expires in {seconds}s', {seconds: state.card.remaining_seconds})}` : '';
   }
   function tick() {
     if (document.hidden || page !== 'clock' || !state?.time?.ntp_synced) return;
@@ -94,7 +105,7 @@
     $('clock-time').textContent = `${pad(state.time.hour_format_24 ? hour : hour % 12 || 12)}:${pad(date.getUTCMinutes())}`;
     $('clock-seconds').textContent = pad(date.getUTCSeconds());
     $('clock-period').textContent = state.time.hour_format_24 ? '24H' : hour < 12 ? 'AM' : 'PM';
-    $('clock-date').textContent = date.toLocaleDateString('en-GB', {weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'});
+    $('clock-date').textContent = date.toLocaleDateString(i18n.locale(), {weekday: 'long', day: 'numeric', month: 'long', timeZone: 'UTC'});
   }
   function condition(code) {
     if (code === 0) return ['Clear sky', '☀'];
@@ -118,32 +129,32 @@
       checkRelease();
     }
     if (page !== 'clock') return;
-    $('sync-status').textContent = state.time.ntp_synced ? 'Time synchronized' : 'Waiting for time';
+    $('sync-status').textContent = t(state.time.ntp_synced ? 'Time synchronized' : 'Waiting for time');
     if (!state.time.ntp_synced) {
       $('clock-time').textContent = '--:--'; $('clock-seconds').textContent = '--';
-      $('clock-date').textContent = 'Waiting for synchronization'; $('clock-period').textContent = '';
+      $('clock-date').textContent = t('Waiting for synchronization'); $('clock-period').textContent = '';
     }
-    $('weather-city').textContent = weather.city || 'Your location';
+    $('weather-city').textContent = weather.city || t('Your location');
     const valid = weather.enabled && weather.valid;
     const [description, symbol] = condition(weather.code);
     $('weather-temp').textContent = valid ? degrees(Number(weather.temperature)).toFixed(1) : '—';
     $('weather-unit').textContent = degreeUnit();
-    $('weather-description').textContent = !weather.enabled ? 'Weather is switched off' : valid ? description : 'Waiting for weather';
+    $('weather-description').textContent = t(!weather.enabled ? 'Weather is switched off' : valid ? description : 'Waiting for weather');
     $('weather-symbol').textContent = valid ? weather.is_day === false && weather.code <= 2 ? '☾' : symbol : '—';
-    $('weather-freshness').textContent = valid ? `${weather.stale ? 'Saved reading · ' : ''}Fetched ${Math.floor(weather.age_seconds / 60)} min ago · reading ${Math.floor((weather.source_age_seconds ?? weather.age_seconds) / 60)} min old` : '';
+    $('weather-freshness').textContent = valid ? `${weather.stale ? t('Saved reading') + ' · ' : ''}${t('Fetched {minutes} min ago · reading {age} min old', {minutes: Math.floor(weather.age_seconds / 60), age: Math.floor((weather.source_age_seconds ?? weather.age_seconds) / 60)})}` : '';
     const windUnit = state.units?.wind || 0;
     const wind = weather.windspeed * [1, 1 / 3.6, 0.621371][windUnit];
-    const direction = weather.wind_direction >= 0 ? ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.floor((weather.wind_direction + 22) / 45) % 8] + ' ' : '';
+    const direction = weather.wind_direction >= 0 ? t(['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.floor((weather.wind_direction + 22) / 45) % 8]) + ' ' : '';
     $('weather-wind').textContent = valid ? `${direction}${Math.round(wind)} ${['km/h', 'm/s', 'mph'][windUnit]}` : '—';
     $('sunrise').textContent = weather.sunrise; $('sunset').textContent = weather.sunset;
-    $('display-note').textContent = state.display.night_active ? state.display.night_dim ? 'Night mode: display dimmed.' : 'Night mode: display off. Showing a PIN wakes it temporarily.' : 'Display active';
+    $('display-note').textContent = t(state.display.night_active ? state.display.night_dim ? 'Night mode: display dimmed.' : 'Night mode: display off. Showing a PIN wakes it temporarily.' : 'Display active');
     $('active-screen').value = state.display.screen ?? 0;
     [...$('active-screen').options].forEach(option => { option.disabled = state.display.available ? !state.display.available[option.value] : Number(option.value) > 2; });
-    $('screen-hold').textContent = state.display.paused ? 'Resume rotation' : 'Hold';
+    $('screen-hold').textContent = t(state.display.paused ? 'Resume rotation' : 'Hold');
     renderForecast();
     $('device-ip').textContent = state.wifi.ip;
     $('device-rssi').textContent = state.wifi.rssi + ' dBm';
-    $('device-uptime').textContent = `${Math.floor(state.system.uptime / 3600)} h ${Math.floor(state.system.uptime / 60) % 60} min`;
+    $('device-uptime').textContent = t('{hours} h {minutes} min', {hours: Math.floor(state.system.uptime / 3600), minutes: Math.floor(state.system.uptime / 60) % 60});
     $('device-memory').textContent = (state.system.free_heap / 1024).toFixed(1) + ' KB';
     tick();
   }
@@ -151,8 +162,10 @@
     if (polling || busy || document.hidden) return;
     polling = true; $('refresh').disabled = true;
     try {
-      state = await request('/api/status'); receivedAt = performance.now(); renderStatus();
-      message($('connection'), `Connected · ${state.wifi.ip}`);
+      state = await request('/api/status'); receivedAt = performance.now();
+      await applyLanguage(state.system.language);
+      renderStatus();
+      message($('connection'), connectionText());
     } catch (error) { message($('connection'), error.message, true); }
     finally { polling = false; $('refresh').disabled = false; }
   }
@@ -169,7 +182,7 @@
   async function displayControl(action, screen) {
     try {
       await request('/api/display', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action, screen})});
-      message($('screen-result'), action === 'show' ? 'Screen selected and held.' : 'Display updated.'); await refresh();
+      message($('screen-result'), t(action === 'show' ? 'Screen selected and held.' : 'Display updated.')); await refresh();
     } catch (error) { message($('screen-result'), error.message, true); }
   }
   $('active-screen').addEventListener('change', event => displayControl('show', Number(event.target.value)));
@@ -212,13 +225,13 @@
   function settingsState(showMessage = false) {
     const cityBytes = new TextEncoder().encode(formControl('city_name').value).length;
     $('city-bytes').textContent = cityBytes;
-    formControl('city_name').setCustomValidity(cityBytes > 31 ? 'Use a shorter city label: at most 31 UTF-8 bytes. Accented and Cyrillic letters use more than one byte.' : '');
+    formControl('city_name').setCustomValidity(cityBytes > 31 ? t('Use a shorter city label: at most 31 UTF-8 bytes. Accented and Cyrillic letters use more than one byte.') : '');
     settingsDirty = Object.keys(settingsChanges()).length > 0;
     $('save-settings').disabled = $('discard-settings').disabled = !settingsDirty || busy;
     document.querySelector('.save-bar').classList.toggle('dirty', settingsDirty);
-    if (showMessage) message($('settings-result'), settingsDirty ? 'Unsaved changes.' : 'No unsaved changes.');
+    if (showMessage) message($('settings-result'), t(settingsDirty ? 'Unsaved changes.' : 'No unsaved changes.'));
   }
-  function fillSettings(config) {
+  async function fillSettings(config) {
     savedSettings = config;
     $('screen-preset').value = 'custom';
     for (const [key, value] of Object.entries(config)) {
@@ -231,6 +244,12 @@
     formControl('password').value = ''; formControl('clear_password').checked = false;
     $('brightness-value').textContent = config.brightness + ' / 7';
     $('settings-fields').disabled = busy;
+    // The language picker sits in the page heading (form="settings-form"), outside the fieldset.
+    formControl('language').disabled = busy;
+    if (Number.isInteger(config.language)) {
+      await applyLanguage(config.language);
+      if (state) message($('connection'), connectionText());
+    }
     settingsState(true);
   }
   if (page === 'settings') {
@@ -240,9 +259,9 @@
     }
     request('/api/config').then(config => {
       // Retain offsets imported through the API that are not quarter hours.
-      if (![...$('timezone').options].some(option => Number(option.value) === config.timezone_offset)) $('timezone').add(new Option(`UTC offset ${config.timezone_offset} seconds`, config.timezone_offset));
-      fillSettings(config);
-    }).catch(error => message($('settings-result'), error.message + ' Reload this page to retry.', true));
+      if (![...$('timezone').options].some(option => Number(option.value) === config.timezone_offset)) $('timezone').add(new Option(t('UTC offset {seconds} seconds', {seconds: config.timezone_offset}), config.timezone_offset));
+      return fillSettings(config);
+    }).catch(error => message($('settings-result'), error.message + ' ' + t('Reload this page to retry.'), true));
   }
   formControl('brightness').addEventListener('input', event => { $('brightness-value').textContent = event.target.value + ' / 7'; });
   settingsForm.addEventListener('input', event => {
@@ -250,12 +269,15 @@
     settingsState(true);
   });
   settingsForm.addEventListener('change', () => settingsState(true));
+  formControl('language').addEventListener('change', () => settingsState(true)); // events do not bubble to the form
   settingsForm.addEventListener('invalid', event => { const details = event.target.closest('details'); if (details) details.open = true; }, true);
   $('discard-settings').addEventListener('click', () => { if (savedSettings && !busy) fillSettings(savedSettings); });
   function stageSettings(values) {
     const original = savedSettings;
     const password = formControl('password').value, clear = formControl('clear_password').checked;
-    fillSettings({...original, ...values}); savedSettings = original;
+    // Staged values fill the form only; the language switches after a successful save.
+    fillSettings({...original, ...values, language: undefined}); savedSettings = original;
+    formControl('language').value = String(values.language ?? original.language);
     formControl('password').value = password; formControl('clear_password').checked = clear; settingsState(true);
   }
   $('screen-preset').addEventListener('change', event => {
@@ -275,16 +297,16 @@
     const file = $('import-file').files[0];
     if (!file || !savedSettings || busy) return;
     try {
-      if (file.size > 8192) throw new Error('Settings file must be at most 8 KB.');
+      if (file.size > 8192) throw new Error(t('Settings file must be at most 8 KB.'));
       const values = JSON.parse(await file.text());
-      if (!values || Array.isArray(values) || typeof values !== 'object') throw new Error('Choose a settings JSON object.');
+      if (!values || Array.isArray(values) || typeof values !== 'object') throw new Error(t('Choose a settings JSON object.'));
       importedSettings = {};
       for (const [key, value] of Object.entries(values)) {
         if (key === 'firmware_version' || !Object.hasOwn(savedSettings, key)) continue;
-        if (typeof value !== typeof savedSettings[key] || (typeof value === 'number' && !Number.isFinite(value))) throw new Error('Invalid type for ' + key);
+        if (typeof value !== typeof savedSettings[key] || (typeof value === 'number' && !Number.isFinite(value))) throw new Error(t('Invalid type for {key}', {key}));
         if (value !== savedSettings[key]) importedSettings[key] = value;
       }
-      $('import-preview').textContent = Object.entries(importedSettings).map(([key, value]) => `${key}: ${JSON.stringify(savedSettings[key])} → ${JSON.stringify(value)}`).join('\n') || 'No changes.';
+      $('import-preview').textContent = Object.entries(importedSettings).map(([key, value]) => `${key}: ${JSON.stringify(savedSettings[key])} → ${JSON.stringify(value)}`).join('\n') || t('No changes.');
       $('apply-import').disabled = !Object.keys(importedSettings).length; $('import-dialog').showModal();
     } catch (error) { message($('settings-result'), error.message, true); }
     finally { $('import-file').value = ''; }
@@ -292,14 +314,14 @@
   $('cancel-import').addEventListener('click', () => $('import-dialog').close());
   $('apply-import').addEventListener('click', () => {
     stageSettings({...settingsChanges(), ...importedSettings}); $('import-dialog').close();
-    message($('settings-result'), 'Imported into the form. Review and save to apply.');
+    message($('settings-result'), t('Imported into the form. Review and save to apply.'));
   });
   $('city-search').addEventListener('click', async () => {
     const query = $('city-query').value.trim();
-    if (query.length < 2 || busy) { message($('city-search-result'), 'Enter at least two characters.', true); return; }
+    if (query.length < 2 || busy) { message($('city-search-result'), t('Enter at least two characters.'), true); return; }
     $('city-search').disabled = true; $('city-results').replaceChildren();
     try {
-      const data = await request('https://geocoding-api.open-meteo.com/v1/search?count=5&language=en&name=' + encodeURIComponent(query));
+      const data = await request('https://geocoding-api.open-meteo.com/v1/search?count=5&language=' + i18n.code() + '&name=' + encodeURIComponent(query));
       for (const city of data.results || []) {
         if (!Number.isFinite(city.latitude) || !Number.isFinite(city.longitude) || typeof city.name !== 'string') continue;
         const button = document.createElement('button'); button.type = 'button'; button.className = 'secondary';
@@ -308,12 +330,12 @@
           const fits = new TextEncoder().encode(city.name).length <= 31;
           formControl('latitude').value = city.latitude; formControl('longitude').value = city.longitude;
           formControl('city_name').value = fits ? city.name : '';
-          settingsState(true); message($('city-search-result'), `${button.textContent}. Coordinates selected.${fits ? '' : ' Enter a short city label.'} Check the UTC offset before saving.`);
+          settingsState(true); message($('city-search-result'), `${button.textContent}. ${t('Coordinates selected.')}${fits ? '' : ' ' + t('Enter a short city label.')} ${t('Check the UTC offset before saving.')}`);
         });
         $('city-results').append(button);
       }
-      message($('city-search-result'), $('city-results').children.length ? 'Choose a location; changes are saved only with Save settings.' : 'No matching locations. Try city, country.');
-    } catch { message($('city-search-result'), 'City search is unavailable. Enter coordinates manually or try again.', true); }
+      message($('city-search-result'), t($('city-results').children.length ? 'Choose a location; changes are saved only with Save settings.' : 'No matching locations. Try city, country.'));
+    } catch { message($('city-search-result'), t('City search is unavailable. Enter coordinates manually or try again.'), true); }
     finally { $('city-search').disabled = false; }
   });
   settingsForm.addEventListener('submit', async event => {
@@ -321,23 +343,23 @@
     if (!savedSettings || busy || !settingsForm.reportValidity()) return;
     const values = settingsChanges();
     if (!Object.keys(values).length) return;
-    busy = true; $('settings-fields').disabled = true; settingsState();
-    message($('settings-result'), 'Saving…');
+    busy = true; $('settings-fields').disabled = true; formControl('language').disabled = true; settingsState();
+    message($('settings-result'), t('Saving…'));
     try {
       const result = await request('/api/config', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(values)});
       delete values.password; delete values.clear_password;
       let actual = {...savedSettings, ...values};
       if (!result.restart) {
         try { actual = await request('/api/config'); }
-        catch { throw Error('Could not verify saved settings. Reload Settings to check.'); }
+        catch { throw Error(t('Could not verify saved settings. Reload Settings to check.')); }
         if (Object.entries(values).some(([key, value]) =>
           key === 'latitude' || key === 'longitude' ? !Number.isFinite(actual[key]) || Math.abs(actual[key] - value) > 0.00001 : actual[key] !== value))
-          throw Error('Some settings were not saved. Your edits are still here; try Save again.');
+          throw Error(t('Some settings were not saved. Your edits are still here; try Save again.'));
       }
-      fillSettings(actual);
-      message($('settings-result'), result.restart ? 'Saved. Clock restarting; reconnect using its new network details.' : 'Saved.');
-    } catch (error) { message($('settings-result'), error.message + (values.password ? ' Re-enter the Wi-Fi password before retrying.' : ''), true); }
-    finally { busy = false; formControl('password').value = ''; $('settings-fields').disabled = false; settingsState(); }
+      await fillSettings(actual);
+      message($('settings-result'), t(result.restart ? 'Saved. Clock restarting; reconnect using its new network details.' : 'Saved.'));
+    } catch (error) { message($('settings-result'), error.message + (values.password ? ' ' + t('Re-enter the Wi-Fi password before retrying.') : ''), true); }
+    finally { busy = false; formControl('password').value = ''; $('settings-fields').disabled = false; formControl('language').disabled = false; settingsState(); }
   });
 
   document.querySelectorAll('[data-show-pin]').forEach(button => button.addEventListener('click', async () => {
@@ -345,7 +367,7 @@
     const result = button.parentElement.querySelector('.pin-result');
     try {
       await request('/maintenance/pin', {method: 'POST'});
-      message(result, 'Read the PIN on your clock. It is visible for 30 seconds.');
+      message(result, t('Read the PIN on your clock. It is visible for 30 seconds.'));
     } catch (error) { message(result, error.message, true); }
     finally { button.disabled = false; }
   }));
@@ -369,13 +391,13 @@
       const change = releases.transition(item, state.system.firmware_version);
       if (change.allowed) selectedRelease = item;
       $('release-notes').href = releases.notes(item);
-      message($('release-result'), `${change.action} · v${item.version} · ${item.published.slice(0, 10)} · ${(item.size / 1024).toFixed(1)} KB`);
-      message($('release-impact'), change.note, !change.allowed || change.confirm);
+      message($('release-result'), `${t(change.action)} · v${item.version} · ${item.published.slice(0, 10)} · ${(item.size / 1024).toFixed(1)} KB`);
+      message($('release-impact'), change.notes.map(note => t(note)).join(' '), !change.allowed || change.confirm);
       $('release-confirm-row').hidden = !change.confirm; $('release-confirm').required = change.confirm;
-      $('upload-button').textContent = `Install v${item.version}`;
+      $('upload-button').textContent = t('Install v{version}', {version: item.version});
     } else {
-      message($('release-result'), 'No releases in this filter.');
-      $('upload-button').textContent = 'Install & restart';
+      message($('release-result'), t('No releases in this filter.'));
+      $('upload-button').textContent = t('Install & restart');
     }
     validateUpdate();
   }
@@ -387,7 +409,7 @@
     for (const item of items) {
       const option = document.createElement('option'); option.value = item.version;
       const allowed = releases.transition(item, state.system.firmware_version).allowed;
-      option.textContent = `v${item.version}${item.version === state.system.firmware_version ? ' · Current' : ''}${recommended.includes(item.version) ? ' · Recommended' : ''}${allowed ? '' : ' · Unavailable'}`;
+      option.textContent = `v${item.version}${item.version === state.system.firmware_version ? ' · ' + t('Current') : ''}${recommended.includes(item.version) ? ' · ' + t('Recommended') : ''}${allowed ? '' : ' · ' + t('Unavailable')}`;
       select.append(option);
     }
     select.disabled = !items.length;
@@ -401,13 +423,13 @@
     $('release-confirm').required = false; $('release-confirm-row').hidden = true;
     $('release-version').replaceChildren(); $('release-notes').hidden = true;
     message($('release-impact'), ''); message($('catalog-date'), ''); validateUpdate();
-    message($('release-result'), 'Checking GitHub…');
+    message($('release-result'), t('Checking GitHub…'));
     try {
-      if (!state) throw Error('Connect to the clock before checking for updates.');
+      if (!state) throw Error(t('Connect to the clock before checking for updates.'));
       releaseCatalog = await releases.check();
-      message($('catalog-date'), ' · Catalog: ' + releaseCatalog.published.replace('T', ' '));
+      message($('catalog-date'), ' · ' + t('Catalog: {date}', {date: releaseCatalog.published.replace('T', ' ')}));
       filterReleases();
-    } catch (error) { message($('release-result'), error instanceof SyntaxError ? 'Invalid GitHub release catalog. Try again later.' : error.message, true); }
+    } catch (error) { message($('release-result'), error instanceof SyntaxError ? t('Invalid GitHub release catalog. Try again later.') : t(error.message), true); }
     finally { checkingRelease = false; $('check-release').disabled = $('release-channel').disabled = false; validateUpdate(); }
   }
   $('check-release').addEventListener('click', checkRelease);
@@ -419,17 +441,17 @@
     $('release-options').hidden = !online; $('local-options').hidden = online;
     $('firmware-file').required = !online;
     $('release-confirm').required = online && !$('release-confirm-row').hidden;
-    $('upload-button').textContent = online && selectedRelease ? `Install v${selectedRelease.version}` : 'Upload & restart';
-    message($('upload-result'), online ? 'Choose a release, then enter your PIN.' : 'Select a non-empty file to continue.');
+    $('upload-button').textContent = online && selectedRelease ? t('Install v{version}', {version: selectedRelease.version}) : t('Upload & restart');
+    message($('upload-result'), t(online ? 'Choose a release, then enter your PIN.' : 'Select a non-empty file to continue.'));
     validateUpdate();
   });
   function validateFile() {
     const file = $('firmware-file').files[0];
-    const error = !file ? 'Choose a non-empty file to continue.' : !file.size ? 'This file is empty. Choose another file.' : !/\.bin(\.gz)?$/i.test(file.name) ? 'Choose a .bin or .bin.gz file.' : '';
+    const error = !file ? t('Choose a non-empty file to continue.') : !file.size ? t('This file is empty. Choose another file.') : !/\.bin(\.gz)?$/i.test(file.name) ? t('Choose a .bin or .bin.gz file.') : '';
     $('firmware-file').setCustomValidity(error);
     $('upload-button').disabled = !!error || busy || checkingRelease;
-    message($('file-info'), file ? `${file.name} · ${(file.size / 1024).toFixed(1)} KB` : 'No file selected.');
-    message($('upload-result'), error || 'Ready when you have entered your PIN.', !!file && !!error);
+    message($('file-info'), file ? `${file.name} · ${(file.size / 1024).toFixed(1)} KB` : t('No file selected.'));
+    message($('upload-result'), error || t('Ready when you have entered your PIN.'), !!file && !!error);
     return !error && !checkingRelease;
   }
   $('firmware-file').addEventListener('change', validateFile);
@@ -442,16 +464,16 @@
         if (event.lengthComputable) {
           const percent = Math.floor(event.loaded / event.total * 100);
           $('upload-progress').value = percent;
-          message($('upload-result'), percent < 100 ? `Uploading… ${percent}%` : 'Upload sent. Waiting for the clock to verify it…');
+          message($('upload-result'), percent < 100 ? t('Uploading… {percent}%', {percent}) : t('Upload sent. Waiting for the clock to verify it…'));
         }
       };
-      xhr.onerror = xhr.ontimeout = () => reject(new Error('Connection lost. The update result is unknown. Check the clock before retrying.'));
-      xhr.onabort = () => reject(new Error('Upload cancelled. Check the clock before retrying.'));
+      xhr.onerror = xhr.ontimeout = () => reject(new Error(t('Connection lost. The update result is unknown. Check the clock before retrying.')));
+      xhr.onabort = () => reject(new Error(t('Upload cancelled. Check the clock before retrying.')));
       xhr.onload = () => {
         if (xhr.status === 200 && xhr.responseText.includes('Update Success!')) resolve();
         else {
           // Never render response HTML. The core reports validation errors with HTTP 200.
-          const error = xhr.responseText.startsWith('Update error:') ? xhr.responseText : xhr.status === 401 ? 'Incorrect PIN. Show the PIN and try again.' : `The clock rejected this upload (${xhr.status}).`;
+          const error = xhr.responseText.startsWith('Update error:') ? xhr.responseText : xhr.status === 401 ? t('Incorrect PIN. Show the PIN and try again.') : t('The clock rejected this upload ({status}).', {status: xhr.status});
           reject(new Error(error));
         }
       };
@@ -472,10 +494,10 @@
     $('update-form').querySelector('[data-show-pin]').disabled = true;
     let accepted = false;
     try {
-      message($('upload-result'), 'Checking PIN…');
+      message($('upload-result'), t('Checking PIN…'));
       await request('/api/maintenance/verify', {method: 'POST', headers});
       if (online) {
-        message($('upload-result'), 'Downloading from GitHub and checking SHA-256… Keep this page open.');
+        message($('upload-result'), t('Downloading from GitHub and checking SHA-256… Keep this page open.'));
         file = await releases.download(item);
       }
       $('upload-progress').hidden = false; $('upload-progress').value = 0;
@@ -484,7 +506,7 @@
       const before = await request('/api/status'), started = performance.now();
       await upload(file, headers, type); accepted = true;
       $('update-pin').value = '';
-      message($('upload-result'), 'Upload accepted. Waiting for restart and checking the installed version…');
+      message($('upload-result'), t('Upload accepted. Waiting for restart and checking the installed version…'));
       let observed;
       for (let attempt = 0; attempt < 20; attempt++) {
         await new Promise(resolve => setTimeout(resolve, attempt < 5 ? 2000 : 3000));
@@ -493,11 +515,11 @@
         const restarted = system && Number.isFinite(system.uptime) && Number.isFinite(before?.system?.uptime) && system.uptime + 2 < before.system.uptime + (performance.now() - started) / 1000;
         if (restarted && typeof system.firmware_version === 'string' && (!online || system.firmware_version === item.version)) {
           $('firmware-version').textContent = 'v' + system.firmware_version;
-          message($('upload-result'), `Update complete. Clock restarted with v${system.firmware_version}.${online ? '' : ' Local file version was not verified against a release.'} Reload the page before another update.`);
+          message($('upload-result'), `${t('Update complete. Clock restarted with v{version}.', {version: system.firmware_version})}${online ? '' : ' ' + t('Local file version was not verified against a release.')} ${t('Reload the page before another update.')}`);
           return;
         }
       }
-      throw Error('Upload accepted, but restart/version could not be confirmed.' + (observed?.system?.firmware_version ? ' Last seen: v' + observed.system.firmware_version + '.' : '') + ' Check the clock before retrying.');
+      throw Error(t('Upload accepted, but restart/version could not be confirmed.') + (observed?.system?.firmware_version ? ' ' + t('Last seen: v{version}.', {version: observed.system.firmware_version}) : '') + ' ' + t('Check the clock before retrying.'));
     } catch (error) { message($('upload-result'), error.message, true); }
     finally {
       busy = false; $('update-pin').value = ''; $('update-pin').disabled = false;
@@ -512,9 +534,9 @@
   document.querySelectorAll('[data-maintenance]').forEach(button => button.addEventListener('click', () => {
     maintenanceAction = button.dataset.maintenance;
     const reset = maintenanceAction === 'eeprom-clear';
-    $('maintenance-title').textContent = reset ? 'Reset all settings?' : 'Restart clock?';
-    $('maintenance-description').textContent = reset ? 'This removes Wi-Fi, display and time settings, and creates a new PIN. You will need to set up the clock again.' : 'The clock will restart and keep all saved settings.';
-    $('confirm-maintenance').textContent = reset ? 'Confirm reset' : 'Confirm restart';
+    $('maintenance-title').textContent = t(reset ? 'Reset all settings?' : 'Restart clock?');
+    $('maintenance-description').textContent = t(reset ? 'This removes Wi-Fi, display and time settings, and creates a new PIN. You will need to set up the clock again.' : 'The clock will restart and keep all saved settings.');
+    $('confirm-maintenance').textContent = t(reset ? 'Confirm reset' : 'Confirm restart');
     $('maintenance-pin').value = ''; message($('dialog-result'), '');
     $('pin-dialog').showModal();
   }));
@@ -527,29 +549,29 @@
     try {
       await request('/api/' + maintenanceAction, {method: 'POST', headers: pinHeader($('maintenance-pin'))});
       $('pin-dialog').close();
-      message($('maintenance-result'), maintenanceAction === 'eeprom-clear' ? 'Settings reset. Connect to TJ56654-Setup to set up the clock again.' : 'Restarting. Your settings have been kept.');
+      message($('maintenance-result'), t(maintenanceAction === 'eeprom-clear' ? 'Settings reset. Connect to TJ56654-Setup to set up the clock again.' : 'Restarting. Your settings have been kept.'));
     } catch (error) { message($('dialog-result'), error.message, true); }
     finally { busy = false; $('confirm-maintenance').disabled = false; $('maintenance-pin').value = ''; }
   });
   for (const action of ['display', 'ntp']) $('test-' + action).addEventListener('click', async () => {
     try {
       await request('/test-' + action);
-      message($('diagnostic-result'), action === 'display' ? '8888 is shown on the clock for 3 seconds.' : 'Time synchronization requested.');
+      message($('diagnostic-result'), t(action === 'display' ? '8888 is shown on the clock for 3 seconds.' : 'Time synchronization requested.'));
     } catch (error) { message($('diagnostic-result'), error.message, true); }
   });
   $('diagnostics').addEventListener('toggle', async () => {
     if (!$('diagnostics').open) return;
     try {
       const debug = await request('/api/debug');
-      $('ntp-details').textContent = `${debug.ntp_successes} successful / ${debug.ntp_attempts} attempts`;
+      $('ntp-details').textContent = t('{successes} successful / {attempts} attempts', {successes: debug.ntp_successes, attempts: debug.ntp_attempts});
       $('network-details').textContent = `${debug.gateway} / ${debug.dns}`;
-      $('last-error').textContent = debug.last_error || 'None';
+      $('last-error').textContent = debug.last_error || t('None');
     } catch (error) { message($('diagnostic-result'), error.message, true); }
   });
   $('scan-i2c').addEventListener('click', async () => {
     try {
       const result = await request('/api/i2c-scan');
-      message($('diagnostic-result'), `I²C devices: ${result.i2c_scan.devices.map(device => device.address).join(', ') || 'none found'}`);
+      message($('diagnostic-result'), t('I²C devices: {list}', {list: result.i2c_scan.devices.map(device => device.address).join(', ') || t('none found')}));
     } catch (error) { message($('diagnostic-result'), error.message, true); }
   });
   addEventListener('pagehide', () => { $('update-pin').value = ''; $('maintenance-pin').value = ''; });

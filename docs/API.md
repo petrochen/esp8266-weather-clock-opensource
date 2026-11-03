@@ -112,7 +112,7 @@ is `--:--:--` and the numeric fields are zero. Treat sync state as authoritative
 | --- | --- |
 | `wifi` | `ssid`, `ip`, `rssi` (dBm), `hostname` |
 | `time` | `current` (local text), `timezone_offset` (base seconds), `ntp_synced`, `epoch` (UTC), `offset` (base plus current DST), `hour_format_24` |
-| `system` | `firmware_version`, `uptime` (seconds), `free_heap`, `max_free_block` (bytes), `heap_fragmentation` (percent), `chip_id` |
+| `system` | `firmware_version`, `language` (web UI: 0 English, 1 Italian, 2 German, 3 French), `uptime` (seconds), `free_heap`, `max_free_block` (bytes), `heap_fragmentation` (percent), `chip_id` |
 | `display` | `night_active` (scheduled window, even while a PIN temporarily wakes the OLED) |
 | `weather` | `enabled`, `valid`, `stale`, `temperature` (°C), `code` (WMO), `windspeed` (km/h), `age_seconds`, `city`, `sunrise`, `sunset` |
 
@@ -161,6 +161,7 @@ filename of `clock-config.json`. Password and PIN values are never exported.
 | `night_enabled` | Boolean; false by default |
 | `night_start_hour`, `night_end_hour` | Integer 0–23 |
 | `night_start_minute`, `night_end_minute` | Integer 0–59 |
+| `language` | Integer 0–3: web UI language (English, Italiano, Deutsch, Français). The clock stores only the index; the browser fetches the dictionary |
 
 `POST /api/config` accepts a JSON object of up to 2048 bytes. Omitted fields remain
 unchanged. Control characters and embedded NULs in string settings are rejected.
