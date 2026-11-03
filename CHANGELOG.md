@@ -5,7 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.11.0] - 2026-11-03
+
+Stable release of the 1.11 line. It contains everything published in the
+1.11.0-beta.1–beta.4 pre-releases below (UV and additional weather screens, screen
+presets, Home Assistant cards, PIN-confirmed GitHub updates with version selection)
+plus the changes in this section. Settings, PIN and EEPROM layout are unchanged
+from the betas and from 1.10.0. See the [release notes](docs/releases/v1.11.0.md).
 
 ### Added
 
@@ -26,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   older firmware reads it as zero (English) and keeps every other setting.
 - Release transition notes are returned as separate sentences (`notes`) so the
   UI can translate them; the joined `note` string remains.
+- Development dependency `minimatch` pinned to 11.0.1 through an npm override
+  (Dependabot GHSA-g3hv-75wg-m249; build tooling only, nothing ships to the clock).
+
+### Fixed
+
+- Settings and Update pages opened in a background tab no longer stay at
+  "Connecting…": the first status read now happens when the tab becomes visible.
 
 ## [1.11.0-beta.4] - 2026-10-03 (pre-release)
 

@@ -23,33 +23,31 @@ panel. Everything still runs on the original **ESP-01S with 1MB flash**.
 
 [![Animated 1.11 beta screen tour: time and weather, daytime UV, comfort, rain, forecast, wind, sun times and a Home Assistant card](images/clock-demo.gif)](https://github.com/petrochen/esp8266-weather-clock-opensource/blob/d0160e765f243cfb2441c639ccc5eb89cc4e54cd/docs/OLED_PREVIEWS.md)
 
-*The 1.11 beta, rendered by the actual firmware with sample data. Extra screens
+*Rendered by the actual firmware with sample data. Extra screens
 are opt-in. [Still image](images/clock-demo-poster.png).*
 
 ### Choose your firmware
 
 | | Version | What you get |
 | --- | --- | --- |
-| **Stable** | [1.10.0](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.10.0) | Time, weather, sunrise/sunset, night schedule, compact web settings and PIN-protected file uploads |
-| **Beta / testing** | [1.11.0-beta.4](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.0-beta.4) | Daytime UV, more weather screens, Home Assistant cards, screen presets and GitHub version selection with rollback warnings |
+| **Stable** | [1.11.0](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.0) | Time, weather, sunrise/sunset, daytime UV and more weather screens, night schedule, Home Assistant cards, GitHub updates with version selection, web interface in English / Italiano / Deutsch / Français |
+| **Previous stable** | [1.10.0](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.10.0) | Time, weather, sunrise/sunset, night schedule, compact web settings and PIN-protected file uploads |
 
-The **1.11 beta** adds today's UV peak and tomorrow's maximum, feels-like
-temperature and outdoor humidity, hourly rain probability, two-day highs/lows,
-wind direction and a combined time-and-weather screen. Choose the pages you want,
-set their timing, or send a short-lived card from Home Assistant.
+**1.11.0** adds today's UV peak and tomorrow's maximum, feels-like temperature and
+outdoor humidity, hourly rain probability, two-day highs/lows, wind direction and a
+combined time-and-weather screen. Choose the pages you want, set their timing, or
+send a short-lived card from Home Assistant. The web interface speaks English,
+Italiano, Deutsch and Français; pick the language at the top of Settings.
 
-**New in beta.4:** choose a specific Stable or Beta version in the web panel,
-reinstall or roll back with your six-digit PIN, and see which features will be
-lost before installing. The browser downloads and checks the image; the clock
-confirms its version after restarting. A real **beta.2 → beta.4 → beta.3 → beta.4**
-trial retained all 30 compared settings. Power-loss recovery and longer hardware
-runs still need testing. [Release notes](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.0-beta.4)
-· [Update and rollback guide](https://github.com/petrochen/esp8266-weather-clock-opensource/blob/d0160e765f243cfb2441c639ccc5eb89cc4e54cd/docs/UPDATES.md)
-· [Home Assistant](https://github.com/petrochen/esp8266-weather-clock-opensource/blob/d0160e765f243cfb2441c639ccc5eb89cc4e54cd/docs/HOME_ASSISTANT.md).
+**Updates from the web panel:** choose a specific Stable or Beta version, reinstall
+or roll back with your six-digit PIN, and see which features will be lost before
+installing. The browser downloads and checks the image; the clock confirms its
+version after restarting. [Release notes](docs/releases/v1.11.0.md)
+· [Update and rollback guide](docs/UPDATES.md)
+· [Home Assistant](docs/HOME_ASSISTANT.md).
 
 **First installation?** Start with the [flashing guide](docs/INSTALLATION.md).
-The default branch (`main`) carries the **1.11 beta** source; to build Stable
-1.10.0, check out its release tag `v1.10.0`. A normal update needs only the firmware `.bin`, not a filesystem
+The default branch (`main`) builds **1.11.0**; older releases are on their tags. A normal update needs only the firmware `.bin`, not a filesystem
 image. For release notifications, choose **Watch → Custom → Releases**.
 
 **Here for the story?** Read on.
@@ -115,16 +113,15 @@ The web page is compressed in flash, with no framework, external font or separat
 
 ### Next: time first, more weather when you want it
 
-The **1.11 beta** adds a time-and-weather page, outdoor comfort, hourly rain
+**1.11.0** adds a time-and-weather page, outdoor comfort, hourly rain
 probability, two-day min/max, a dedicated daytime UV peak page, wind direction
 and a moon at night. UV shows today, its level and tomorrow’s expected maximum. Presets,
 per-screen timing and optional night dimming keep these useful on a tiny screen.
 Home Assistant can send a room reading as a short card that expires automatically.
 The compact web panel gains import preview, city search and display controls.
 
-The beta is available as a [pre-release](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.0-beta.1) for testing;
-physical hardware validation is still pending. Existing settings and PINs are preserved; the new pages are opt-in. Details belong in the
-[beta notes](docs/releases/v1.11.0-beta.1.md) and [integration guide](docs/HOME_ASSISTANT.md).
+Existing settings and PINs are preserved; the new pages are opt-in. Details are in the
+[release notes](docs/releases/v1.11.0.md) and the [integration guide](docs/HOME_ASSISTANT.md).
 
 ### What's new in 1.10.0?
 
@@ -159,16 +156,15 @@ After flashing, connect to **TJ56654-Setup** with the setup password `12345678`,
 ![WiFi connection demo: moving waves, connection details, then the beta time-and-weather screen](images/wifi-demo.gif)
 
 *From connecting to the clock. Sample network details; timing is edited for
-readability, not a startup benchmark. The final combined screen is a beta feature.
+readability, not a startup benchmark. The final combined screen is optional.
 [Still image](images/wifi-demo-poster.png).*
 
 **Already running this firmware?** Open `/update`, choose the clock's `.bin`, press **Show PIN on clock**, enter the six digits, then choose **Upload & restart**. The current installed version handles that first upload, so an older version can still require its existing login/code. The new page appears after the update.
 
-**Already on beta.2 or beta.3?** Choose **Stable + Beta → Check GitHub** to
-install beta.4 with your PIN, without downloading a file yourself. Reload the
-page after the restart to get the new **All / Stable / Beta** version picker.
-Going back to beta.1 or 1.10.0 removes GitHub updating; you will need a manual BIN
-upload to return. See the [compatibility guide](https://github.com/petrochen/esp8266-weather-clock-opensource/blob/d0160e765f243cfb2441c639ccc5eb89cc4e54cd/docs/UPDATES.md).
+**Already on a 1.11 beta (beta.2 or newer)?** Open **Update**, choose **Stable**
+and install **v1.11.0** with your PIN, without downloading a file yourself. Reload
+the page after the restart. Going back to beta.1 or 1.10.0 removes GitHub updating;
+you will need a manual BIN upload to return. See the [compatibility guide](docs/UPDATES.md).
 
 The normal update needs **one firmware file**. The web interface is inside it; leave the advanced Filesystem option alone unless you have a separate filesystem image for a specific reason.
 

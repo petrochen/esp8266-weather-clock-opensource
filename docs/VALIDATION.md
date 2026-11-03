@@ -1,5 +1,35 @@
 # Build, validation and upgrade notes
 
+## 1.11.0 validation
+
+Local checks completed on 2026-11-03 with the pinned toolchain (esp8266 3.1.2,
+ArduinoJson 7.4.2, Adafruit GFX 1.12.4). The build produced **478,944 bytes**,
+leaving **288 bytes** below the mutual-OTA limit; static RAM **38,480 bytes**;
+instruction memory plus cache **62,007 / 65,536 bytes**. The embedded page is
+**67,158 bytes** before gzip, **20,685 bytes** in flash. The firmware gained one
+settings field (`language`, a former reserved byte of the feature record) and one
+status field; the translations themselves are not in flash.
+
+Passed: all seven host executables with ASan/UBSan, including language validation,
+export/import round-trip and the English fallback for an index written by newer
+firmware without resetting other features; ESLint and Ruff; embedded asset
+reproducibility; `tests/test_releases.cjs`; `tests/test_i18n.cjs` (306 UI strings,
+complete it/de/fr dictionaries, matching placeholders, no markup); the publisher
+tests; and the Chromium regression over the actual embedded page, which now also
+switches en → it → de → fr → en, checks translated attributes and localized dates,
+and keeps English with a visible note when the dictionary download fails.
+`localStorage`/`sessionStorage` remain empty and no cookies are set.
+
+Hardware, 2026-11-03: a physical ESP-01S on beta.4 (6.9 days uptime, heap 32 kB,
+fragmentation 3 %) was updated over the air with the PIN-authenticated `/update`
+upload. It restarted in about 10 seconds, kept all settings and the PIN, and
+reported `system.language` in `/api/status`. From a real Chrome browser the
+language was switched to Italian through Settings → Save (applied without reload),
+then to German and French through `/api/config`; Settings, Clock and Update pages
+rendered translated, the Clock date followed the locale, the Update page listed
+the live GitHub catalog in German, and English was restored. Older Stable rollback,
+power-loss recovery and a long soak on this build are not yet repeated.
+
 ## 1.11.0-beta.4 local validation
 
 Local checks completed on 2026-10-03. The pinned isolated Linux build produced

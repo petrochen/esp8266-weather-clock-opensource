@@ -20,9 +20,11 @@ args = parser.parse_args()
 header = (root / 'firmware/weather_clock/web_assets.h').read_text()
 html = gzip.decompress(bytes(int(value, 16) for value in re.findall(r'0x([0-9a-f]{2})', header))).decode()
 version = re.search(r'FIRMWARE_VERSION "([^"]+)"', (root / 'firmware/weather_clock/config.h').read_text()).group(1)
+# The simulated clock runs a beta so the catalog offers both a stable update and a newer beta.
+installed = '1.11.0-beta.4'
 status = dict(wifi=dict(hostname='living-room-clock', ip='192.168.2.149', rssi=-58),
               time=dict(epoch=1791031680, offset=3600, ntp_synced=True, hour_format_24=True),
-              system=dict(firmware_version=version, uptime=92400, free_heap=28320),
+              system=dict(firmware_version=installed, uptime=92400, free_heap=28320),
               display=dict(night_active=False),
               weather=dict(enabled=True, valid=True, stale=False, temperature=22.4, code=1, windspeed=12.5, age_seconds=180, city='Portimão', sunrise='07:31', sunset='19:14'))
 config = dict(firmware_version=version, ssid='Home', hostname='living-room-clock', timezone_offset=0, dst_enabled=True,
@@ -59,7 +61,7 @@ def release_item(version, github=True, forecast=True, **fields):
 
 catalog = dict(schema=2, target='esp01s-1m64-dio-80', published='2026-10-03T12:00:00Z',
                recommended=dict(stable='1.11.0', beta='1.12.0-beta.2'),
-               releases=[release_item('1.11.0'), release_item('1.12.0-beta.2'), release_item(version), release_item('1.11.0-beta.3'),
+               releases=[release_item('1.11.0'), release_item('1.12.0-beta.2'), release_item(installed), release_item('1.11.0-beta.3'),
                          release_item('1.11.0-beta.1', github=False), release_item('1.10.0', github=False, forecast=False)])
 reboot_mode = 'ok'
 reboot_status_reads = 0
@@ -351,7 +353,7 @@ with sync_playwright() as p:
     calls.remove(('POST', '/update')) # subsequent manual-upload guards retain their own assertions
     api_status['system'] = deepcopy(status['system'])
     open_page('/update')
-    page.locator('#release-version').select_option(version)
+    page.locator('#release-version').select_option(installed)
     page.locator('#release-result').filter(has_text='Reinstall').wait_for()
     assert page.locator('#upload-button').is_disabled()
     page.locator('#release-confirm').check()
@@ -428,7 +430,7 @@ with sync_playwright() as p:
         api_status['system'] = deepcopy(status['system'])
         reboot_mode = mode
         open_page('/update')
-        page.locator('#release-version').select_option(version if mode != 'wrong-version' else '1.12.0-beta.2')
+        page.locator('#release-version').select_option(installed if mode != 'wrong-version' else '1.12.0-beta.2')
         if mode != 'wrong-version': page.locator('#release-confirm').check()
         page.evaluate('window.setTimeout = ((native) => (fn, ms, ...args) => native(fn, ms === 2000 || ms === 3000 ? 5 : ms, ...args))(window.setTimeout)')
         page.locator('#update-pin').fill('123456'); page.locator('#upload-button').click()
@@ -476,7 +478,7 @@ with sync_playwright() as p:
     with page.expect_download() as download_info:
         page.locator('#download-diagnostics').evaluate('el => el.click()')
     report = json.loads(Path(download_info.value.path()).read_text())
-    assert report['firmware'] == version
+    assert report['firmware'] == installed
     assert not any(key in report for key in ('ssid', 'ip', 'hostname', 'chip_id', 'password', 'pin', 'city', 'latitude'))
     open_page('/config')
     page.locator('#settings-fields:not([disabled])').wait_for()
