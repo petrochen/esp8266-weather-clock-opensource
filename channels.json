@@ -2,9 +2,9 @@
   "schema": 1,
   "target": "esp01s-1m64-dio-80",
   "stable": {
-    "version": "1.11.0",
+    "version": "1.11.1",
     "size": 478944,
-    "sha256": "92bd527ef60fe90c33597a761df888c8cc11972eaf64ea03541dfcac8d100a89"
+    "sha256": "a1fa7fecbb1e44cab3b26af6851b097eead695d5fe758e3ca4232309435a58c4"
   },
   "beta": {
     "version": "1.11.0-beta.4",
