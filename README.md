@@ -30,7 +30,7 @@ are opt-in. [Still image](images/clock-demo-poster.png).*
 
 | | Version | What you get |
 | --- | --- | --- |
-| **Stable** | [1.11.0](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.0) | Time, weather, sunrise/sunset, daytime UV and more weather screens, night schedule, Home Assistant cards, GitHub updates with version selection, web interface in English / Italiano / Deutsch / Français |
+| **Stable** | [1.11.1](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.11.1) | Time, weather, sunrise/sunset, daytime UV and more weather screens, night schedule, Home Assistant cards, GitHub updates with version selection, web interface in English / Italiano / Deutsch / Français |
 | **Previous stable** | [1.10.0](https://github.com/petrochen/esp8266-weather-clock-opensource/releases/tag/v1.10.0) | Time, weather, sunrise/sunset, night schedule, compact web settings and PIN-protected file uploads |
 
 **1.11.0** adds today's UV peak and tomorrow's maximum, feels-like temperature and
@@ -47,7 +47,7 @@ version after restarting. [Release notes](docs/releases/v1.11.0.md)
 · [Home Assistant](docs/HOME_ASSISTANT.md).
 
 **First installation?** Start with the [flashing guide](docs/INSTALLATION.md).
-The default branch (`main`) builds **1.11.0**; older releases are on their tags. A normal update needs only the firmware `.bin`, not a filesystem
+The default branch (`main`) builds **1.11.1**; older releases are on their tags. A normal update needs only the firmware `.bin`, not a filesystem
 image. For release notifications, choose **Watch → Custom → Releases**.
 
 **Here for the story?** Read on.
@@ -162,7 +162,7 @@ readability, not a startup benchmark. The final combined screen is optional.
 **Already running this firmware?** Open `/update`, choose the clock's `.bin`, press **Show PIN on clock**, enter the six digits, then choose **Upload & restart**. The current installed version handles that first upload, so an older version can still require its existing login/code. The new page appears after the update.
 
 **Already on a 1.11 beta (beta.2 or newer)?** Open **Update**, choose **Stable**
-and install **v1.11.0** with your PIN, without downloading a file yourself. Reload
+and install **v1.11.1** with your PIN, without downloading a file yourself. Reload
 the page after the restart. Going back to beta.1 or 1.10.0 removes GitHub updating;
 you will need a manual BIN upload to return. See the [compatibility guide](docs/UPDATES.md).
 

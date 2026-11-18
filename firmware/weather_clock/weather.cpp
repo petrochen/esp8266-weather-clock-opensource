@@ -220,7 +220,9 @@ void ICACHE_FLASH_ATTR processWeather() {
 
   if (weatherRetry.pending) {
     if (weatherRetry.isRetryTime(millis())) fetchWeatherAsync();
-  } else if (!weatherStarted || uint32_t(millis() - lastWeatherUpdate) >= config.weather_interval * 1000UL) {
+  } else if (!weatherStarted || uint32_t(millis() - lastWeatherUpdate) >=
+                                    (weather.valid ? config.weather_interval : 60UL) * 1000UL) {
+    // No reading yet (boot, new location): try again in a minute, not after a full interval.
     fetchWeatherAsync();
   }
 }
