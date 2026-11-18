@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.1] - 2026-11-18
+
+Settings, PIN and EEPROM layout are unchanged from 1.11.0. See the
+[release notes](docs/releases/v1.11.1.md).
+
+### Fixed
+
+- No weather for a whole refresh interval after a failed first request (#17). When
+  the first weather request after a boot or a location change timed out, the clock
+  retried three times within seconds and then waited a full refresh interval
+  (30 minutes by default) with only the time on screen. Until it has a first
+  reading it now tries again after one minute. Later refreshes are unchanged: the
+  last reading stays on screen, marked `*`, and the next attempt comes after the
+  refresh interval.
+
 ## [1.11.0] - 2026-11-03
 
 Stable release of the 1.11 line. It contains everything published in the

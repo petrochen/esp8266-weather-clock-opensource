@@ -83,7 +83,18 @@ int main() {
   weatherRequest.payload = R"({"current":{"time":1791028800,"temperature_2m":-100,"weather_code":99,"wind_speed_10m":500}})";
   weatherRequest.complete(); assert(!weather.stale && weather.temperature == -100 && weather.windspeed == 500);
   fetchWeatherAsync(); weatherRequest.payload = goodWeather; weatherRequest.complete();
-  std::cout << "PASS: weather 502 recovery, stale cache, invalid schema, retry exhaustion, watchdog abort, open failure, synchronous callback\n";
+  // No reading yet (boot, new location): after an exhausted burst the next attempt
+  // comes in one minute, not after the configured interval (#17).
+  resetWeather(); weatherRequest.code = -11; weatherRequest.payload = "";
+  processWeather(); weatherRequest.complete();
+  for(int i=0;i<3;++i){fakeMillis=weatherRetry.nextRetryTime;processWeather();weatherRequest.complete();}
+  assert(!weather.valid && !weatherRetry.pending && weatherState == WEATHER_IDLE);
+  sent=weatherRequest.sends;
+  fakeMillis += 59999; processWeather(); assert(weatherRequest.sends==sent);
+  ++fakeMillis; processWeather(); assert(weatherRequest.sends==sent+1);
+  weatherRequest.code = 200; weatherRequest.payload = goodWeather; weatherRequest.complete();
+  assert(weather.valid && !weather.stale);
+  std::cout << "PASS: weather 502 recovery, stale cache, invalid schema, retry exhaustion, first-reading retry, watchdog abort, open failure, synchronous callback\n";
 
   // Failed startup DNS does not gate future attempts.
   fakeMillis=20000;processNTPResponse();assert(ntpState==NTP_RESOLVING);
