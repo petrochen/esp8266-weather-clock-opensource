@@ -1,5 +1,30 @@
 # Build, validation and upgrade notes
 
+## 1.11.1 validation
+
+Local checks completed on 2026-11-18 with the pinned toolchain (esp8266 3.1.2,
+ArduinoJson 7.4.2, Adafruit GFX 1.12.4). The build produced **478,944 bytes**,
+**288 bytes** below the mutual-OTA limit: the code grew by 16 bytes over 1.11.0 and
+the image size stayed the same. Static RAM **38,480 bytes**; instruction memory plus
+cache **62,007 / 65,536 bytes**. The web interface and the embedded page are those
+of 1.11.0.
+
+Passed: all host executables with ASan/UBSan, including a new case for an exhausted
+first burst of weather requests (three retries, then the next attempt after 60
+seconds while there is no reading); the case fails on the 1.11.0 sources.
+`tests/test_releases.cjs`, `tests/test_i18n.cjs` and the publisher tests; 320 OLED
+renders without wrapping or clipping; embedded asset reproducibility. The Chromium
+regressions, ESLint and Ruff ran in CI on pull request #18.
+
+Hardware, 2026-11-18: a physical ESP-01S on 1.11.0 (22.6 hours uptime, heap 31.6 kB,
+fragmentation 5 %) was updated over the air with the PIN-authenticated `/update`
+upload, which took 9 seconds. It answered on 1.11.1 eight seconds later, `/api/config`
+was identical apart from the version, and the first weather reading was valid 18
+seconds after boot. `tests/test_device.py` passed (API schema, time, weather cache,
+heap, 30-request smoke test). The failed first request itself was not reproduced on
+hardware: that path is covered by the host test only. Rollback, power-loss recovery
+and a long soak are not repeated for this build.
+
 ## 1.11.0 validation
 
 Local checks completed on 2026-11-03 with the pinned toolchain (esp8266 3.1.2,
