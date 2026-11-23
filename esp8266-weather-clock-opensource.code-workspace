@@ -1,0 +1,20 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"string": "cpp"
+		}
+	},
+	"extensions": {
+		"recommendations": [
+			"platformio.platformio-ide",
+			"ms-vscode.cpptools",
+			"ms-vscode.vscode-serial-monitor",
+			"seunlanlege.action-buttons"
+		]
+	}
+}

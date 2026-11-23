@@ -7,9 +7,11 @@ import subprocess
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('build', type=Path)
 parser.add_argument('--size-tool', required=True)
+parser.add_argument('--binary', default='weather_clock.ino.bin')
+parser.add_argument('--elf', default='weather_clock.ino.elf')
 args = parser.parse_args()
-binary = args.build / 'weather_clock.ino.bin'
-elf = args.build / 'weather_clock.ino.elf'
+binary = args.build / args.binary
+elf = args.build / args.elf
 output = subprocess.check_output([args.size_tool, '-A', str(elf)], text=True)
 sections = {}
 for line in output.splitlines():

@@ -1,5 +1,6 @@
 # Arduino build artifacts
 build/
+.pio/
 *.bin
 *.elf
 *.map
