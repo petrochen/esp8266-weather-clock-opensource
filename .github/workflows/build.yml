@@ -70,3 +70,18 @@ jobs:
           path: build/display-preview/
           if-no-files-found: error
           retention-days: 30
+  # Community build: checked on every push, but separate from `verify` so that it
+  # never blocks packaging of the Arduino CLI release binary.
+  platformio:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned PlatformIO
+        run: python3 -m pip install platformio==6.2.0
+      - name: Compile ESP-01S 1 MB with PlatformIO
+        run: python3 -m platformio run -e esp01s
+      - name: Check flash and instruction memory budgets
+        run: python3 tests/check_build_size.py .pio/build/esp01s --binary firmware.bin --elf firmware.elf --size-tool "$HOME/.platformio/packages/toolchain-xtensa/bin/xtensa-lx106-elf-size"

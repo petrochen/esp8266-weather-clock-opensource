@@ -35,7 +35,11 @@ Feature requests are welcome! Please include:
    - Avoid String concatenation in loops
    - Explain timing, ownership, storage compatibility and other non-obvious constraints in comments
 5. **Commit with clear messages**: Explain what and why, not how
-6. **Submit PR** with description of changes
+6. **Leave release metadata alone**: do not change `FIRMWARE_VERSION`, `CHANGELOG.md`
+   or `tools/update_profiles.json`. The maintainer updates them when a release is
+   prepared (see [Preparing a Release](#preparing-a-release)); describe your change
+   in the PR text instead
+7. **Submit PR** with description of changes
 
 ### Code Guidelines
 

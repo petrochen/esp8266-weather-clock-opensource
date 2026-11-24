@@ -14,14 +14,15 @@ Complete step-by-step guide to flash this firmware on your ESP8266 weather clock
 ## Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Arduino IDE Setup](#arduino-ide-setup)
-3. [Hardware Connection](#hardware-connection)
-4. [First Flash (via FTDI)](#first-flash-via-ftdi)
-5. [Initial Configuration](#initial-configuration)
-6. [OTA Updates](#ota-updates)
-7. [Troubleshooting](#troubleshooting)
-8. [Recovery and reset](#recovery-and-reset)
-9. [Verifying installation](#verifying-installation)
+2. [PlatformIO Setup](#platformio-setup)
+3. [Arduino IDE Setup](#arduino-ide-setup)
+4. [Hardware Connection](#hardware-connection)
+5. [First Flash (via FTDI)](#first-flash-via-ftdi)
+6. [Initial Configuration](#initial-configuration)
+7. [OTA Updates](#ota-updates)
+8. [Troubleshooting](#troubleshooting)
+9. [Recovery and reset](#recovery-and-reset)
+10. [Verifying installation](#verifying-installation)
 
 ---
 
@@ -44,6 +45,43 @@ Complete step-by-step guide to flash this firmware on your ESP8266 weather clock
   - FT232: https://ftdichip.com/drivers/vcp-drivers/
   - CP2102: https://www.silabs.com/developers/usb-to-uart-bridge-vcp-drivers
   - CH340: Usually auto-installed on macOS/Linux
+
+---
+
+## PlatformIO Setup
+
+The repository root is also a PlatformIO project. Install the PlatformIO IDE
+extension in VS Code (or PlatformIO Core), then open the repository root and
+select the `esp01s` environment. PlatformIO installs the pinned ESP8266 core
+and libraries automatically. The configuration uses the 1 MB / 64 KB filesystem
+layout, DIO flash mode, 80 MHz CPU and the compact WiFiManager portal.
+The PlatformIO build disables inlining of small functions to fit the OTA budget;
+it is not identical to the Arduino CLI release build.
+
+From the repository root with PlatformIO Core:
+
+```sh
+pio run -e esp01s
+pio run -e esp01s -t upload --upload-port COM3
+pio device monitor -b 115200 --port COM3
+```
+
+Replace `COM3` with the adapter's port. Enter programming mode as described in
+[Hardware Connection](#hardware-connection) before uploading. The firmware is
+`.pio/build/esp01s/firmware.bin`; web assets are already embedded, so no
+filesystem upload is needed. The OLED uses GPIO0 for SDA and GPIO2 for SCL.
+
+PlatformIO's flash percentage alone does not ensure room for OTA. Check the
+project's OTA, RAM and instruction-memory budgets after building:
+
+```sh
+python tests/check_build_size.py .pio/build/esp01s \
+  --binary firmware.bin --elf firmware.elf --size-tool /path/to/xtensa-lx106-elf-size
+```
+
+Use the size tool in PlatformIO's `toolchain-xtensa/bin` package (on Windows,
+use `xtensa-lx106-elf-size.exe`). See [Build validation](VALIDATION.md#reproducible-build)
+for the limits. A successful build does not replace testing on the actual device.
 
 ---
 

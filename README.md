@@ -47,6 +47,8 @@ version after restarting. [Release notes](docs/releases/v1.11.0.md)
 · [Home Assistant](docs/HOME_ASSISTANT.md).
 
 **First installation?** Start with the [flashing guide](docs/INSTALLATION.md).
+The repository root also contains a [PlatformIO project](docs/INSTALLATION.md#platformio-setup)
+for the ESP-01S 1 MB.
 The default branch (`main`) builds **1.11.1**; older releases are on their tags. A normal update needs only the firmware `.bin`, not a filesystem
 image. For release notifications, choose **Watch → Custom → Releases**.
 
